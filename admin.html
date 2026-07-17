@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>더 레이스 — 관리자</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css">
+<style>
+:root{--track:#10231C;--board:#0B1512;--panel:#163026;--line:#24443A;--amber:#FFB020;--chalk:#F2EFE6;--muted:#9DB4AA;--up:#5BC77E;--down:#E06A5A}
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:var(--track);color:var(--chalk);font-family:'Pretendard',sans-serif;padding:20px}
+.grid{display:grid;grid-template-columns:340px 1fr;gap:16px;max-width:1200px;margin:0 auto}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px;margin-bottom:14px}
+h2{font-size:15px;color:var(--amber);margin-bottom:12px}
+button{padding:10px 14px;border:1px solid var(--line);border-radius:8px;background:var(--board);color:var(--chalk);cursor:pointer;font-size:14px;margin:3px 2px}
+button.go{background:var(--amber);color:#1A1205;font-weight:700;border:none}
+button:disabled{opacity:.35;cursor:default}
+input{padding:9px;border-radius:8px;border:1px solid var(--line);background:var(--board);color:var(--chalk)}
+.status{font-family:monospace;font-size:20px;color:var(--amber);margin-bottom:8px}
+table{width:100%;font-size:13px;border-collapse:collapse}
+td,th{padding:6px 4px;border-bottom:1px solid var(--line);text-align:left}
+td.num{font-family:monospace;color:var(--amber);text-align:right}
+.log{font-family:monospace;font-size:12px;color:var(--muted);max-height:220px;overflow:auto;line-height:1.6}
+.truth-t{color:var(--up)}.truth-f{color:var(--down)}
+.small{font-size:12px;color:var(--muted)}
+</style>
+</head>
+<body>
+<div class="grid">
+<div>
+  <div class="card"><h2>시즌 제어</h2>
+    <div class="status" id="stStatus">—</div>
+    <div style="margin-bottom:8px"><input id="seedInput" placeholder="시드 (비우면 랜덤)" style="width:150px">
+      <button onclick="startSeason()">시즌 개시</button></div>
+    <button class="go" id="btnNext" onclick="nextPhase()">다음 단계 ▶</button>
+    <button class="down" onclick="resetAll()" style="color:var(--down)">전체 초기화</button>
+    <div class="small" style="margin-top:8px">순서: 출마표 → 소식 → 상점 → 베팅(타이머) → 경주(자동 계산) → 정산 → 다음 라운드</div>
+    <div style="margin-top:8px">베팅 시간 <input id="betSecs" value="120" style="width:60px">초</div>
+  </div>
+  <div class="card"><h2>진위 미리보기</h2>
+    <button onclick="togglePeek()" id="btnPeek">열기 (기본 봉인)</button>
+    <div id="peekBox" class="small" style="margin-top:8px"></div>
+  </div>
+  <div class="card"><h2>수동 지급</h2>
+    <select id="grantWho" style="padding:9px;background:var(--board);color:var(--chalk);border:1px solid var(--line);border-radius:8px"></select>
+    <input id="grantAmt" placeholder="만원" style="width:70px">
+    <button onclick="grant()">지급</button>
+    <div class="small">예외 상황 대비 안전망. 남용 금지.</div>
+  </div>
+</div>
+<div>
+  <div class="card"><h2>참가자 (<span id="pCount">0</span>명)</h2>
+    <table id="pTable"><tr><th>이름</th><th style="text-align:right">자금</th><th>베팅</th><th>구제</th></tr></table>
+  </div>
+  <div class="card"><h2>운영 로그</h2><div class="log" id="opLog"></div></div>
+</div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+<script>
+/* ════════ Firebase 설정 (index.html과 동일하게) ════════ */
+const firebaseConfig = {
+  apiKey: "여기에_붙여넣기", authDomain: "hsdb-1.firebaseapp.com",
+  databaseURL: "https://hsdb-1-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "hsdb-1", storageBucket: "hsdb-1.appspot.com",
+  messagingSenderId: "여기에", appId: "여기에"
+};
+firebase.initializeApp(firebaseConfig);
+const db=firebase.database();const ROOT='therace';
+firebase.auth().signInAnonymously();
+
+/* ════════ 게임 데이터 (index.html과 동일해야 함 — 수정 시 두 파일 함께) ════════ */
+const HORSES={'질풍':{s:[4,5,1,2,3]},'만리':{s:[3,1,5,3,3]},'중용':{s:[4,3,3,2,3]},
+ '우직':{s:[3,2,3,5,2]},'적토':{s:[5,4,3,2,1]},'섬광':{s:[4,4,2,1,4]},'현무':{s:[3,2,4,2,4]}};
+const STATN=['스피드','스타트','뒷심','적응력','기수'];
+const SCHEDULE=[['중',0],['단',0],['장',0],['중',1],['단',0],['장',1],['중',0],['단',1],['중',0],['장',0]];
+const DISTW={'단':[.35,.50,.15],'중':[.40,.30,.30],'장':[.35,.15,.50]};
+const FIELD1=['질풍','만리','중용','우직','적토'],FIELD2=['만리','중용','우직','적토','섬광'];
+const QUOTA={'경마일보':6,'김패독':7,'터프':5,'마방수첩':4,'광장':3,'찌라시':3};
+const MEDIA={'공시':{rel:1},'경마일보':{rel:.85},'김패독':{rel:.7},'터프':{rel:.5},'마방수첩':{rel:.5},'광장':{rel:.3},'찌라시':{rel:.3}};
+/* CARDS: index.html의 CARDS 배열을 그대로 복사 (m,pub,t,tg,e,perm,anchor,auto,noeff) */
+const CARDS=[
+[{m:'공시',pub:1,noeff:1},{m:'경마일보',pub:1,tg:'중용',e:3},{m:'김패독',pub:1,tg:'만리',e:5},
+ {m:'찌라시',pub:1,tg:'적토',e:-10,anchor:1},{m:'마방수첩',pub:0,tg:'적토',e:-7,anchor:1},
+ {m:'광장',pub:0,tg:'질풍',e:10},{m:'터프',pub:0,tg:'우직',e:7}],
+[{m:'공시',pub:1,noeff:1,auto:1},{m:'경마일보',pub:1,tg:'질풍',e:3},{m:'김패독',pub:1,tg:'적토',e:5},
+ {m:'터프',pub:1,tg:'만리',e:7},{m:'마방수첩',pub:0,tg:'질풍',e:-7},{m:'광장',pub:0,tg:'우직',e:10},
+ {m:'찌라시',pub:0,tg:'중용',e:-10}],
+[{m:'공시',pub:1,noeff:1,auto:1},{m:'공시',pub:1,noeff:1},{m:'김패독',pub:1,tg:'만리',e:5},
+ {m:'터프',pub:1,tg:'적토',e:-7},{m:'광장',pub:0,tg:'만리',e:10,perm:'뒷심'},
+ {m:'찌라시',pub:0,tg:'우직',e:10},{m:'마방수첩',pub:0,tg:'만리',e:-7}],
+[{m:'공시',pub:1,noeff:1,auto:1},{m:'경마일보',pub:1,tg:'중용',e:3,perm:'스타트'},{m:'김패독',pub:1,tg:'우직',e:5},
+ {m:'터프',pub:1,tg:'적토',e:-7},{m:'마방수첩',pub:0,tg:'적토',e:7},{m:'광장',pub:0,tg:'질풍',e:-10},
+ {m:'찌라시',pub:0,tg:'만리',e:-10}],
+[{m:'공시',pub:1,noeff:1,auto:1},{m:'공시',pub:1,noeff:1},{m:'김패독',pub:1,tg:'질풍',e:-5,anchor:1},
+ {m:'터프',pub:1,tg:'적토',e:7},{m:'광장',pub:0,tg:'만리',e:-10},{m:'찌라시',pub:0,tg:'질풍',e:-10},
+ {m:'마방수첩',pub:0,tg:'질풍',e:-7}],
+[{m:'공시',pub:1,noeff:1},{m:'공시',pub:1,noeff:1,auto:1},{m:'경마일보',pub:1,tg:'섬광',e:3},
+ {m:'김패독',pub:1,tg:'섬광',e:-5},{m:'광장',pub:0,tg:'만리',e:10,anchor:1},
+ {m:'터프',pub:0,tg:'우직',e:7},{m:'찌라시',pub:0,tg:'적토',e:10}],
+[{m:'공시',pub:1,noeff:1,auto:1},{m:'경마일보',pub:1,tg:'적토',e:3},{m:'김패독',pub:1,tg:'중용',e:5},
+ {m:'터프',pub:1,tg:'우직',e:-7,perm:'뒷심'},{m:'광장',pub:0,tg:'섬광',e:10},
+ {m:'찌라시',pub:0,tg:'중용',e:-10},{m:'마방수첩',pub:0,tg:'중용',e:7}],
+[{m:'공시',pub:1,noeff:1,auto:1},{m:'공시',pub:1,noeff:1},{m:'김패독',pub:1,tg:'섬광',e:5},
+ {m:'터프',pub:1,tg:'적토',e:-7},{m:'마방수첩',pub:0,tg:'적토',e:7,perm:'적응력'},
+ {m:'광장',pub:0,tg:'우직',e:-10},{m:'찌라시',pub:0,tg:'섬광',e:-10}],
+[{m:'공시',pub:1,noeff:1,auto:1},{m:'경마일보',pub:1,tg:'중용',e:3},{m:'김패독',pub:1,tg:'적토',e:5},
+ {m:'터프',pub:1,tg:'만리',e:-7},{m:'마방수첩',pub:0,tg:'적토',e:-7},{m:'광장',pub:0,tg:'우직',e:10},
+ {m:'찌라시',pub:0,tg:'적토',e:-10,anchor:1}],
+[{m:'공시',pub:1,noeff:1,auto:1},{m:'공시',pub:1,noeff:1},{m:'경마일보',pub:1,tg:'만리',e:3},
+ {m:'김패독',pub:1,tg:'만리',e:5},{m:'터프',pub:0,tg:'적토',e:7},{m:'광장',pub:0,tg:'섬광',e:-10},
+ {m:'찌라시',pub:0,tg:'중용',e:10}]];
+
+/* ════════ 유틸 ════════ */
+const $=id=>document.getElementById(id);
+const fmt=n=>Math.round(n*10)/10;
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);
+  t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;}}
+function log(m){const el=$('opLog');el.innerHTML=`<div>[${new Date().toLocaleTimeString()}] ${m}</div>`+el.innerHTML;}
+
+/* ════════ 진위 생성 (시드 결정론) ════════ */
+function genTruth(seed){
+  const rng=mulberry32(seed);
+  const byMedia={};
+  CARDS.forEach((rc,r)=>rc.forEach((c,i)=>{
+    if(c.m==='공시')return;
+    (byMedia[c.m]=byMedia[c.m]||[]).push({r,i,anchor:c.anchor});
+  }));
+  const truth={};
+  Object.keys(byMedia).forEach(m=>{
+    const list=byMedia[m];let need=QUOTA[m];
+    list.forEach(x=>{if(x.anchor){truth[`${x.r}_${x.i}`]=true;need--;}});
+    const rest=list.filter(x=>!x.anchor);
+    for(let i=rest.length-1;i>0;i--){const j=Math.floor(rng()*(i+1));[rest[i],rest[j]]=[rest[j],rest[i]];}
+    rest.forEach((x,k)=>truth[`${x.r}_${x.i}`]=k<need);
+  });
+  return truth;
+}
+function raceRng(seed,round,horse){
+  let h=seed+round*1000;for(const ch of horse)h+=ch.charCodeAt(0);
+  return mulberry32(h)()*5;
+}
+
+/* ════════ 상태 ════════ */
+let state=null,players={},bets={},truthCache=null;
+db.ref(`${ROOT}/state`).on('value',s=>{state=s.val();renderStatus();});
+db.ref(`${ROOT}/players`).on('value',s=>{players=s.val()||{};renderPlayers();});
+db.ref(`${ROOT}/bets`).on('value',s=>{bets=s.val()||{};renderPlayers();});
+function truths(){if(!truthCache&&state&&state.seed!==undefined)truthCache=genTruth(state.seed);return truthCache;}
+
+function renderStatus(){
+  if(!state){$('stStatus').textContent='시즌 없음';return;}
+  $('stStatus').textContent=`R${state.round||0} · ${state.phase||'-'} · seed ${state.seed}`;
+}
+function renderPlayers(){
+  const t=$('pTable');const sel=$('grantWho');
+  let rows='<tr><th>이름</th><th style="text-align:right">자금</th><th>베팅</th><th>구제</th></tr>';
+  let opts='';const r=state?state.round:0;
+  Object.keys(players).forEach(id=>{
+    const p=players[id];const b=bets[r]&&bets[r][id];
+    rows+=`<tr><td>${p.name}</td><td class="num">${fmt(p.money)}</td>
+      <td>${b?'✅ '+b.total+'만':'—'}</td><td>${p.welfareUsed?'사용':''}</td></tr>`;
+    opts+=`<option value="${id}">${p.name}</option>`;
+  });
+  t.innerHTML=rows;sel.innerHTML=opts;$('pCount').textContent=Object.keys(players).length;
+}
+
+/* ════════ 시즌 제어 ════════ */
+async function startSeason(){
+  if(state&&state.round>0&&!confirm('진행 중 시즌이 있습니다. 새로 시작할까요?'))return;
+  const seed=parseInt($('seedInput').value)||Math.floor(Math.random()*1e9);
+  truthCache=null;
+  await db.ref(`${ROOT}/state`).set({phase:'intro',round:1,seed,field:FIELD1,fatigue:null,statMods:null});
+  await db.ref(`${ROOT}/results`).remove();await db.ref(`${ROOT}/bets`).remove();
+  await db.ref(`${ROOT}/owned`).remove();await db.ref(`${ROOT}/verified`).remove();
+  await db.ref(`${ROOT}/consult`).remove();await db.ref(`${ROOT}/log`).remove();
+  const ups={};Object.keys(players).forEach(id=>{ups[`${id}/money`]=100;ups[`${id}/welfareUsed`]=false;});
+  if(Object.keys(ups).length)await db.ref(`${ROOT}/players`).update(ups);
+  log(`시즌 개시 — seed ${seed}, 전원 100만원 리셋`);
+}
+async function resetAll(){if(!confirm('모든 데이터(참가자 포함)를 삭제합니다.'))return;
+  await db.ref(ROOT).remove();truthCache=null;log('전체 초기화 완료');}
+
+const ORDER=['intro','info','shop','betting','race','result'];
+async function nextPhase(){
+  if(!state)return;
+  const cur=state.phase;const idx=ORDER.indexOf(cur);
+  if(cur==='result'){ // 다음 라운드로
+    if(state.round>=10){await db.ref(`${ROOT}/state/phase`).set('final');log('시즌 종료 → 최종 화면');return;}
+    await advanceRound();return;
+  }
+  const next=ORDER[idx+1];
+  if(next==='betting'){
+    const secs=parseInt($('betSecs').value)||120;
+    await db.ref(`${ROOT}/state`).update({phase:'betting',deadline:Date.now()+secs*1000});
+    log(`베팅 시작 — ${secs}초`);return;
+  }
+  if(next==='race'){await runRace();return;}
+  await db.ref(`${ROOT}/state/phase`).set(next);log(`단계 → ${next}`);
+}
+
+async function advanceRound(){
+  const r=state.round,res=(await db.ref(`${ROOT}/results/${r}`).get()).val();
+  const T=truths();
+  // 영구 스탯 반영 (사실 판정 perm 카드)
+  const mods=JSON.parse(JSON.stringify(state.statMods||{}));
+  CARDS[r-1].forEach((c,i)=>{
+    if(c.perm&&T[`${r-1}_${i}`]){
+      mods[c.tg]=mods[c.tg]||{};
+      mods[c.tg][c.perm]=(mods[c.tg][c.perm]||0)+(c.e>0?1:-1);
+      log(`영구 반영: ${c.tg} ${c.perm} ${c.e>0?'+1':'-1'}`);
+    }});
+  const nr=r+1;
+  const field=nr>=6?FIELD2:FIELD1;
+  await db.ref(`${ROOT}/state`).update({phase:'intro',round:nr,field,
+    fatigue:res?res.winner:null,statMods:mods,deadline:null,
+    showRanking:r===5});
+  if(r===5)log('★ 중간 순위 공개 라운드 통과 — 스크린에 순위 표시');
+  if(nr===6)log('★ 교체 실행: 질풍 → 섬광');
+  log(`라운드 ${nr} 시작 (피로: ${res?res.winner:'-'})`);
+}
+
+/* ════════ 경주 계산 + 정산 ════════ */
+function effStats(h){const s=[...HORSES[h].s];const mods=(state.statMods||{})[h]||{};
+  STATN.forEach((n,i)=>{if(mods[n])s[i]=Math.max(1,Math.min(5,s[i]+mods[n]));});return s;}
+function baseScore(h){
+  const [d,mud]=SCHEDULE[state.round-1];const st=effStats(h);const w=DISTW[d];
+  let b=(st[0]*w[0]+st[1]*w[1]+st[2]*w[2])/5*60;
+  if(mud)b-=(5-st[3])*3;
+  if(state.fatigue===h)b-=1.5*(6-st[4]);
+  return b;
+}
+async function runRace(){
+  const r=state.round,T=truths();const field=state.field?Object.values(state.field):FIELD1;
+  const bases={},infos={},scores={};
+  field.forEach(h=>{bases[h]=fmt(baseScore(h));infos[h]=0;});
+  CARDS[r-1].forEach((c,i)=>{
+    if(c.noeff||!field.includes(c.tg))return;
+    if(T[`${r-1}_${i}`])infos[c.tg]+=c.e;
+  });
+  field.forEach(h=>{infos[h]=Math.max(-12,Math.min(12,infos[h]));
+    scores[h]=fmt(bases[h]+infos[h]+raceRng(state.seed,r,h));});
+  const order=[...field].sort((a,b)=>scores[b]-scores[a]);
+  const winner=order[0];
+  // 패리뮤추얼
+  const rb=bets[r]||{};const pool={};let total=0;
+  field.forEach(h=>pool[h]=0);
+  Object.values(rb).forEach(b=>{Object.keys(b.stakes).forEach(h=>{pool[h]+=b.stakes[h];total+=b.stakes[h];});});
+  const odds={};let welfareExcess=0;
+  field.forEach(h=>{
+    if(pool[h]<=0){odds[h]=0;return;}
+    const raw=total/pool[h];odds[h]=fmt(Math.min(raw,15));
+    if(h===winner&&raw>15)welfareExcess=fmt((raw-15)*pool[h]);
+  });
+  // 진위 공개 목록
+  const truthsOut={};CARDS[r-1].forEach((c,i)=>{if(!c.noeff)truthsOut[i]=!!T[`${r-1}_${i}`];});
+  const moneyBefore={};Object.keys(players).forEach(id=>moneyBefore[id]=players[id].money);
+  await db.ref(`${ROOT}/results/${r}`).set({field,bases,infos,scores,order,winner,odds,pool,total,
+    welfareExcess,truths:truthsOut,moneyBefore,t:Date.now()});
+  await db.ref(`${ROOT}/state/phase`).set('race');
+  log(`R${r} 계산 완료 — 우승 ${winner} (${scores[winner]}점), 배당 ${odds[winner]||0}배`);
+  // 정산 (경주 애니메이션과 무관하게 미리)
+  const ups={};
+  for(const id of Object.keys(rb)){
+    const b=rb[id];let back=0;
+    if(b.stakes[winner])back+=b.stakes[winner]*(odds[winner]||0);
+    if(b.insurance&&b.insurance!==winner)back+=b.stakes[b.insurance]*0.5;
+    if(back>0)ups[`${id}/money`]=fmt(players[id].money+back);
+  }
+  if(Object.keys(ups).length)await db.ref(`${ROOT}/players`).update(ups);
+  // 파산 구제
+  setTimeout(async()=>{
+    const snap=(await db.ref(`${ROOT}/players`).get()).val()||{};
+    for(const id of Object.keys(snap)){
+      const p=snap[id];
+      if(p.money<1&&!p.welfareUsed){
+        await db.ref(`${ROOT}/players/${id}`).update({money:10,welfareUsed:true});
+        await db.ref(`${ROOT}/log/welfare/${r}/${id}`).set(true);
+        log(`구제 발동: ${p.name} → 10만원 (1회 한정)`);
+      }
+    }
+  },500);
+}
+
+/* ════════ 자동 응답 (판별권 / 자문권) ════════ */
+db.ref(`${ROOT}/verified`).on('child_changed',handleVerify);
+db.ref(`${ROOT}/verified`).on('child_added',handleVerify);
+async function handleVerify(s){
+  const uid=s.key,rounds=s.val();if(!state)return;const T=truths();
+  for(const r of Object.keys(rounds)){
+    const v=rounds[r];
+    if(v.req&&v.answer===undefined){
+      const ans=!!T[`${r-1}_${v.idx}`];
+      await db.ref(`${ROOT}/verified/${uid}/${r}/answer`).set(ans);
+      log(`판별 응답: ${players[uid]?players[uid].name:uid} R${r} 카드#${v.idx} → ${ans?'사실':'거짓'}`);
+    }
+  }
+}
+db.ref(`${ROOT}/consult`).on('child_changed',handleConsult);
+db.ref(`${ROOT}/consult`).on('child_added',handleConsult);
+async function handleConsult(s){
+  const uid=s.key,c=s.val();if(!c||!c.req||c.answer||!state)return;
+  const T=truths();const r=c.round,h=c.horse;
+  let est=baseScore(h);
+  CARDS[r-1].forEach((card,i)=>{
+    if(card.noeff||card.tg!==h||!card.pub)return;
+    if(T[`${r-1}_${i}`])est+=card.e;
+  });
+  est+=(Math.random()-0.5)*6; // 오차
+  const field=state.field?Object.values(state.field):FIELD1;
+  const others=field.filter(x=>x!==h).map(x=>baseScore(x));
+  const rank=others.filter(o=>o>est).length+1;
+  const tone=rank===1?'현재 컨디션과 조건을 종합하면 이번 경주 최상위권으로 봅니다.'
+    :rank<=2?'우승 다툼이 가능한 상위권 전력으로 판단됩니다.'
+    :rank<=3?'중위권입니다. 변수가 따라주면 입상권, 아니면 애매합니다.'
+    :'이번 조건에서는 쉽지 않아 보입니다. 하위권 전력으로 평가합니다.';
+  const answer=`${h}에 대한 소견 — ${tone} (숨은 소식은 반영되지 않은 평가이며, 제 눈에도 오차는 있습니다.)`;
+  await db.ref(`${ROOT}/consult/${uid}/answer`).set(answer);
+  log(`자문 응답: ${players[uid]?players[uid].name:uid} → ${h} (내부평가 ${fmt(est)}점/${rank}위권)`);
+}
+
+/* ════════ 진위 미리보기 / 수동 지급 ════════ */
+let peek=false;
+function togglePeek(){
+  peek=!peek;$('btnPeek').textContent=peek?'봉인하기':'열기 (기본 봉인)';
+  if(!peek){$('peekBox').innerHTML='';return;}
+  if(!state){$('peekBox').textContent='시즌 없음';return;}
+  const T=truths();let html='';
+  CARDS.forEach((rc,r)=>{
+    html+=`<b>R${r+1}</b>: `;
+    html+=rc.map((c,i)=>c.noeff?null:`<span class="${T[`${r}_${i}`]?'truth-t':'truth-f'}">${c.tg}${c.e>0?'+':''}${c.e}</span>`)
+      .filter(Boolean).join(' · ')+'<br>';
+  });
+  $('peekBox').innerHTML=html;
+}
+async function grant(){
+  const id=$('grantWho').value,amt=parseFloat($('grantAmt').value);
+  if(!id||!amt)return;
+  await db.ref(`${ROOT}/players/${id}/money`).transaction(m=>fmt((m||0)+amt));
+  log(`수동 지급: ${players[id].name} +${amt}만`);
+}
+</script>
+</body>
+</html>
