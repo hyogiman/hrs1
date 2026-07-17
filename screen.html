@@ -83,17 +83,20 @@ h1.big span{color:var(--amber)}
 <script>
 /* ════════ Firebase 설정 (다른 파일과 동일하게) ════════ */
 const firebaseConfig = {
-  apiKey: "AIzaSyAyv5Q2_ZPyjvwCqyF3isfVchn_HkwtPPQ",
-  authDomain: "hrs1-faaaf.firebaseapp.com",
-  databaseURL: "https://hrs1-faaaf-default-rtdb.asia-southeast1.firebasedatabase.app",
-  projectId: "hrs1-faaaf",
-  storageBucket: "hrs1-faaaf.firebasestorage.app",
-  messagingSenderId: "778756252374",
-  appId: "1:778756252374:web:01b24fa2864a87183e5f77"
+  apiKey: "여기에_붙여넣기", authDomain: "hsdb-1.firebaseapp.com",
+  databaseURL: "https://hsdb-1-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "hsdb-1", storageBucket: "hsdb-1.appspot.com",
+  messagingSenderId: "여기에", appId: "여기에"
 };
 firebase.initializeApp(firebaseConfig);
 const db=firebase.database();const ROOT='therace';
-firebase.auth().signInAnonymously();
+firebase.auth().signInAnonymously().catch(e=>{
+  document.getElementById('center').innerHTML=
+    `<h1 class="big">연결 <span>오류</span></h1><p class="subbig">${
+    e.code==='auth/configuration-not-found'
+      ?'익명 인증이 꺼져 있습니다 — Firebase 콘솔 > Authentication > 익명(Anonymous) 사용 설정 후 새로고침'
+      :'firebaseConfig 값을 확인하세요 ('+e.code+')'}</p>`;
+});
 
 const HORSES={'질풍':{c:'#C9D6DF',tag:'단거리 스타트 괴물'},'만리':{c:'#3D7BE4',tag:'장거리 대기만성'},
  '중용':{c:'#D9A62E',tag:'올라운더'},'우직':{c:'#8A5A36',tag:'악천후의 철마'},
