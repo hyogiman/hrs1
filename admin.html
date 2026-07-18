@@ -96,41 +96,116 @@ const HORSES={'질풍':{s:[4,5,1,2,3]},'만리':{s:[3,1,5,3,3]},'중용':{s:[4,3
 const STATN=['스피드','스타트','뒷심','적응력','기수'];
 const SCHEDULE=[['중',0],['단',0],['장',0],['중',1],['단',0],['장',1],['중',0],['단',1],['중',0],['장',0]];
 const DISTW={'단':[.35,.50,.15],'중':[.40,.30,.30],'장':[.35,.15,.50]};
-const FIELD1=['질풍','만리','중용','우직','적토'],FIELD2=['만리','중용','우직','적토','섬광'];
+const ALLH=['질풍','만리','중용','우직','적토','섬광','현무'];
+function pickField(seed,round){
+  const rng=mulberry32(seed*31+round*7919);
+  const a=[...ALLH];
+  for(let i=a.length-1;i>0;i--){const j=Math.floor(rng()*(i+1));[a[i],a[j]]=[a[j],a[i]];}
+  return a.slice(0,5);
+}
+function baseScoreP(h,round,fatigue,mods){
+  const [d,mud]=SCHEDULE[round-1];const st=[...HORSES[h].s];
+  const mm=(mods||{})[h]||{};
+  STATN.forEach((n,i)=>{if(mm[n])st[i]=Math.max(1,Math.min(5,st[i]+mm[n]));});
+  const w=DISTW[d];
+  let b=(st[0]*w[0]+st[1]*w[1]+st[2]*w[2])/5*60;
+  if(mud)b-=(5-st[3])*3;
+  if(fatigue===h)b-=1.5*(6-st[4]);
+  return b;
+}
+// 카드 대상 배정: 앵커(음수)=그 라운드 최강자, 앵커(양수)=최약자, 나머지는 균형 배분(말당 최대 2장)
+function assignTargets(seed,round,field,fatigue,mods){
+  const rng=mulberry32(seed*13+round*104729);
+  const bases={};field.forEach(h=>bases[h]=baseScoreP(h,round,fatigue,mods));
+  const strong=[...field].sort((a,b)=>bases[b]-bases[a])[0];
+  const weak=[...field].sort((a,b)=>bases[a]-bases[b])[0];
+  const tg={},cnt={};field.forEach(h=>cnt[h]=0);
+  const cards=CARDS[round-1];
+  cards.forEach((c,i)=>{if(c.noeff)return;
+    if(c.anchor){const t=c.e<0?strong:weak;tg[i]=t;cnt[t]++;}});
+  const pool=[...field];
+  for(let i=pool.length-1;i>0;i--){const j=Math.floor(rng()*(i+1));[pool[i],pool[j]]=[pool[j],pool[i]];}
+  let p=0;
+  cards.forEach((c,i)=>{if(c.noeff||tg[i]!==undefined)return;
+    let tries=0,t=pool[p%pool.length];
+    while(cnt[t]>=2&&tries<10){p++;t=pool[p%pool.length];tries++;}
+    tg[i]=t;cnt[t]++;p++;});
+  return tg;
+}
 const QUOTA={'경마일보':6,'김패독':7,'터프':5,'마방수첩':4,'광장':3,'찌라시':3};
 const MEDIA={'공시':{rel:1},'경마일보':{rel:.85},'김패독':{rel:.7},'터프':{rel:.5},'마방수첩':{rel:.5},'광장':{rel:.3},'찌라시':{rel:.3}};
 /* CARDS: index.html의 CARDS 배열을 그대로 복사 (m,pub,t,tg,e,perm,anchor,auto,noeff) */
 const CARDS=[
-[{m:'공시',pub:1,noeff:1},{m:'경마일보',pub:1,tg:'중용',e:3},{m:'김패독',pub:1,tg:'만리',e:5},
- {m:'찌라시',pub:1,tg:'적토',e:-10,anchor:1},{m:'마방수첩',pub:0,tg:'적토',e:-7,anchor:1},
- {m:'광장',pub:0,tg:'질풍',e:10},{m:'터프',pub:0,tg:'우직',e:7}],
-[{m:'공시',pub:1,noeff:1,auto:1},{m:'경마일보',pub:1,tg:'질풍',e:3},{m:'김패독',pub:1,tg:'적토',e:5},
- {m:'터프',pub:1,tg:'만리',e:7},{m:'마방수첩',pub:0,tg:'질풍',e:-7},{m:'광장',pub:0,tg:'우직',e:10},
- {m:'찌라시',pub:0,tg:'중용',e:-10}],
-[{m:'공시',pub:1,noeff:1,auto:1},{m:'공시',pub:1,noeff:1},{m:'김패독',pub:1,tg:'만리',e:5},
- {m:'터프',pub:1,tg:'적토',e:-7},{m:'광장',pub:0,tg:'만리',e:10,perm:'뒷심'},
- {m:'찌라시',pub:0,tg:'우직',e:10},{m:'마방수첩',pub:0,tg:'만리',e:-7}],
-[{m:'공시',pub:1,noeff:1,auto:1},{m:'경마일보',pub:1,tg:'중용',e:3,perm:'스타트'},{m:'김패독',pub:1,tg:'우직',e:5},
- {m:'터프',pub:1,tg:'적토',e:-7},{m:'마방수첩',pub:0,tg:'적토',e:7},{m:'광장',pub:0,tg:'질풍',e:-10},
- {m:'찌라시',pub:0,tg:'만리',e:-10}],
-[{m:'공시',pub:1,noeff:1,auto:1},{m:'공시',pub:1,noeff:1},{m:'김패독',pub:1,tg:'질풍',e:-5,anchor:1},
- {m:'터프',pub:1,tg:'적토',e:7},{m:'광장',pub:0,tg:'만리',e:-10},{m:'찌라시',pub:0,tg:'질풍',e:-10},
- {m:'마방수첩',pub:0,tg:'질풍',e:-7}],
-[{m:'공시',pub:1,noeff:1},{m:'공시',pub:1,noeff:1,auto:1},{m:'경마일보',pub:1,tg:'섬광',e:3},
- {m:'김패독',pub:1,tg:'섬광',e:-5},{m:'광장',pub:0,tg:'만리',e:10,anchor:1},
- {m:'터프',pub:0,tg:'우직',e:7},{m:'찌라시',pub:0,tg:'적토',e:10}],
-[{m:'공시',pub:1,noeff:1,auto:1},{m:'경마일보',pub:1,tg:'적토',e:3},{m:'김패독',pub:1,tg:'중용',e:5},
- {m:'터프',pub:1,tg:'우직',e:-7,perm:'뒷심'},{m:'광장',pub:0,tg:'섬광',e:10},
- {m:'찌라시',pub:0,tg:'중용',e:-10},{m:'마방수첩',pub:0,tg:'중용',e:7}],
-[{m:'공시',pub:1,noeff:1,auto:1},{m:'공시',pub:1,noeff:1},{m:'김패독',pub:1,tg:'섬광',e:5},
- {m:'터프',pub:1,tg:'적토',e:-7},{m:'마방수첩',pub:0,tg:'적토',e:7,perm:'적응력'},
- {m:'광장',pub:0,tg:'우직',e:-10},{m:'찌라시',pub:0,tg:'섬광',e:-10}],
-[{m:'공시',pub:1,noeff:1,auto:1},{m:'경마일보',pub:1,tg:'중용',e:3},{m:'김패독',pub:1,tg:'적토',e:5},
- {m:'터프',pub:1,tg:'만리',e:-7},{m:'마방수첩',pub:0,tg:'적토',e:-7},{m:'광장',pub:0,tg:'우직',e:10},
- {m:'찌라시',pub:0,tg:'적토',e:-10,anchor:1}],
-[{m:'공시',pub:1,noeff:1,auto:1},{m:'공시',pub:1,noeff:1},{m:'경마일보',pub:1,tg:'만리',e:3},
- {m:'김패독',pub:1,tg:'만리',e:5},{m:'터프',pub:0,tg:'적토',e:7},{m:'광장',pub:0,tg:'섬광',e:-10},
- {m:'찌라시',pub:0,tg:'중용',e:10}]];
+[{m:'공시',pub:1,t:'',auto:1,noeff:1},
+ {m:'경마일보',pub:1,t:'{말}, 동계 훈련 기록 자체 최고치 경신 확인. 조련사 "완성됐다"',e:3},
+ {m:'김패독',pub:1,t:'"{말} 이 친구, 새벽에 보니 걸음이 묵직해요. 제 감으로는 오늘 사고 한번 칩니다"',e:5},
+ {m:'찌라시',pub:1,t:'[퍼옴] {말} 마방 어젯밤 수의사 차량 목격. 겉으론 멀쩡. 아는 사람은 뺐다 함.',e:-10,anchor:1},
+ {m:'마방수첩',pub:0,t:'옆 마방({말}) 분위기 요즘 뒤숭숭하던데… 🤫',e:-7,anchor:1},
+ {m:'광장',pub:0,t:'{말} 오늘 발주 연습 개빠르던데?? 직관러 3명 동의',e:10},
+ {m:'터프',pub:0,t:'[단독] {말}, 극비 발굽 시술설!!',e:7}],
+[{m:'공시',pub:1,t:'',auto:1,noeff:1},
+ {m:'경마일보',pub:1,t:'{말}, 발주 반응속도 측정 결과 리그 최상위권 확인',e:3},
+ {m:'김패독',pub:1,t:'"{말} 어깨 근육이 아주 단단해요. 몸이 말해줍니다"',e:5},
+ {m:'터프',pub:1,t:'[단독] {말} 마방, 비밀 병기 조련설!!',e:7},
+ {m:'마방수첩',pub:0,t:'옆칸 {말} 오늘 아침 사료를 남기던데 🤔',e:-7},
+ {m:'광장',pub:0,t:'{말} 새벽 게이트 연습 폭발적이던데? 본 사람 더 없음?',e:10},
+ {m:'찌라시',pub:0,t:'{말} 기수 야간 음주 목격담. 사진 있다는데 아직 못 구함.',e:-10}],
+[{m:'공시',pub:1,t:'',auto:1,noeff:1},
+ {m:'공시',pub:1,t:'기상 전망: 명일 강수 가능성 높음. 주로 상태 변동 유의.',noeff:1},
+ {m:'김패독',pub:1,t:'"{말}는 오늘 같은 조건에서 다른 말이 됩니다. 오늘이 그 무대예요"',e:5},
+ {m:'터프',pub:1,t:'{말} 한계설 — 전문가 익명 인터뷰 입수!!',e:-7},
+ {m:'광장',pub:0,t:'{말} 요즘 지구력 훈련 성과 미쳤다는 소문. 산책러 증언 다수',e:10,perm:'뒷심'},
+ {m:'찌라시',pub:0,t:'{말} 마방 관계자들 대규모 베팅 정황. 뭘 아는 거다.',e:10},
+ {m:'마방수첩',pub:0,t:'옆칸 {말} 요즘 밤에 잠을 설치던데…',e:-7}],
+[{m:'공시',pub:1,t:'',auto:1,noeff:1},
+ {m:'경마일보',pub:1,t:'{말}, 신형 발주 훈련 도입 — 측정 데이터로 성과 확인',e:3,perm:'스타트'},
+ {m:'김패독',pub:1,t:'"비 오면 {말}이죠. 진창은 이 친구 안방입니다"',e:5},
+ {m:'터프',pub:1,t:'{말} 우천 공포증설!! 과거 빗길 낙마 트라우마 재조명',e:-7},
+ {m:'마방수첩',pub:0,t:'{말} 마방, 오늘 아침 새 편자 급히 주문했다더라',e:7},
+ {m:'광장',pub:0,t:'{말} 진창 훈련에서 개고생하던데 ㅋㅋ 오늘 힘들 듯',e:-10},
+ {m:'찌라시',pub:0,t:'{말} 기수, 과거 우천 경주 관련 좋지 않은 이력 있다는 제보',e:-10}],
+[{m:'공시',pub:1,t:'',auto:1,noeff:1},
+ {m:'공시',pub:1,t:'전 출전마 대상 정기 정밀검진 예정 공고 (결과는 추후 공시)',noeff:1},
+ {m:'김패독',pub:1,t:'"{말}이… 걸음이 이상해요. 30년 본 제 눈은 못 속입니다"',e:-5,anchor:1},
+ {m:'터프',pub:1,t:'{말} 스피드 재측정 — 역대급 수치 나왔다!!',e:7},
+ {m:'광장',pub:0,t:'{말} 오늘은 답없다 vs 다르다, 광장 논쟁 中 (부정 우세)',e:-10},
+ {m:'찌라시',pub:0,t:'{말} 마방 매각설. 내부 어수선하다 함.',e:-10},
+ {m:'마방수첩',pub:0,t:'{말} 칸에 오늘 수의사가 두 번 다녀감',e:-7}],
+[{m:'공시',pub:1,t:'',auto:1,noeff:1},
+ {m:'공시',pub:1,t:'금일 주로 정밀 점검 완료 공시. 안전 이상 없음.',noeff:1},
+ {m:'경마일보',pub:1,t:'{말}, 최근 훈련 데이터 상승세 뚜렷 — 수치로 확인',e:3},
+ {m:'김패독',pub:1,t:'"{말}, 오늘 조건은 통계적으로 불리합니다. 제 답은 정해져 있어요"',e:-5},
+ {m:'광장',pub:0,t:'{말} 훈련 영상 방금 떴는데 이거 우승각 아니냐?? 링크 참조',e:10,anchor:1},
+ {m:'터프',pub:0,t:'{말}, 대관식 예고!! 오늘은 하늘의 계시',e:7},
+ {m:'찌라시',pub:0,t:'{말}, 조용히 컨디션 회복 완료. 아는 사람들 다시 담는 중.',e:10}],
+[{m:'공시',pub:1,t:'',auto:1,noeff:1},
+ {m:'경마일보',pub:1,t:'{말} 훈련 데이터 전 항목 시즌 최고치',e:3},
+ {m:'김패독',pub:1,t:'"{말}의 시간이 옵니다. 이 조건에선 이 친구가 교과서예요"',e:5},
+ {m:'터프',pub:1,t:'{말} 노쇠설 — 최근 회복 속도 급감 포착!!',e:-7,perm:'뒷심'},
+ {m:'광장',pub:0,t:'{말} 어제 조교 타임 실화냐? 지금까지는 몸풀기였네',e:10},
+ {m:'찌라시',pub:0,t:'{말} 마방 관련 모종의 담합설. 이번 주 냄새가 남.',e:-10},
+ {m:'마방수첩',pub:0,t:'우리 구역에서 제일 조용한 애({말})가 제일 무섭지',e:7}],
+[{m:'공시',pub:1,t:'',auto:1,noeff:1},
+ {m:'공시',pub:1,t:'금일 돌발 기상에 따른 안전 점검 완료 공시',noeff:1},
+ {m:'김패독',pub:1,t:'"돌발 변수엔 결국 노련한 기수죠. {말} 쪽 기수가 이런 날 강합니다"',e:5},
+ {m:'터프',pub:1,t:'{말} 재앙의 날, 오늘 재현되나!!',e:-7},
+ {m:'마방수첩',pub:0,t:'{말}이 요즘 새벽마다 몰래 빗길 적응 훈련 하던데',e:7,perm:'적응력'},
+ {m:'광장',pub:0,t:'{말} 오늘 아침 발굽 상태 별로라던데. 직관러 증언.',e:-10},
+ {m:'찌라시',pub:0,t:'{말} 최근 성적 만들기 조작설',e:-10}],
+[{m:'공시',pub:1,t:'',auto:1,noeff:1},
+ {m:'경마일보',pub:1,t:'{말}, 후반기 최다 상위권 진입 — 꾸준함으로 입증',e:3},
+ {m:'김패독',pub:1,t:'"지금 폼으로 {말}을 이길 말은 없어요. 단언합니다"',e:5},
+ {m:'터프',pub:1,t:'{말} 혹사 논란 — 피로 누적 심각설!!',e:-7},
+ {m:'마방수첩',pub:0,t:'요즘 새벽마다 울음소리가 들림… {말} 칸 쪽에서',e:-7},
+ {m:'광장',pub:0,t:'{말}이 갑자기 훈련량 2배로 늘렸다는데? 뭐 있나',e:10},
+ {m:'찌라시',pub:0,t:'{말} 마방 내부 붕괴 직전. 이번 주 큰 거 터진다. 마지막 경고.',e:-10,anchor:1}],
+[{m:'공시',pub:1,t:'',auto:1,noeff:1},
+ {m:'공시',pub:1,t:'시즌 최종전 안내 — 전 출전마 최종 검진 통과',noeff:1},
+ {m:'경마일보',pub:1,t:'{말}, 시즌 지표 1위 — 데이터는 거짓말하지 않는다',e:3},
+ {m:'김패독',pub:1,t:'"마지막 제 답은 정해져 있어요 — {말}입니다"',e:5},
+ {m:'터프',pub:0,t:'{말}, 유종의 미인가 몰락의 완성인가 — 마방 "최상" 주장',e:7},
+ {m:'광장',pub:0,t:'{말} 마지막까지 스태미나 버틸 수 있음?',e:-10},
+ {m:'찌라시',pub:0,t:'최종전 승부 밀약설 — 우승마는 이미 정해져 있다? {말}이라 함.',e:10}]];
 
 /* ════════ 유틸 ════════ */
 const $=id=>document.getElementById(id);
@@ -199,8 +274,11 @@ async function startSeason(){
   truthCache=null;
   try{
   const secs=parseInt($('betSecs').value)||300;
-  await db.ref(`${ROOT}/state`).set({phase:'open',round:1,seed,field:FIELD1,fatigue:null,statMods:null,
-    deadline:Date.now()+secs*1000});
+  const field=pickField(seed,1);
+  const tg=assignTargets(seed,1,field,null,null);
+  await db.ref(`${ROOT}/state`).set({phase:'open',round:1,seed,field,fatigue:null,statMods:null,
+    cardTg:tg,deadline:Date.now()+secs*1000});
+  await db.ref(`${ROOT}/cardTg`).set({1:tg});
   }catch(e){dbError(e);return;}
   await db.ref(`${ROOT}/results`).remove();await db.ref(`${ROOT}/bets`).remove();
   await db.ref(`${ROOT}/owned`).remove();await db.ref(`${ROOT}/verified`).remove();
@@ -233,23 +311,27 @@ async function extendTime(){
 async function advanceRound(){
   const r=state.round,res=(await db.ref(`${ROOT}/results/${r}`).get()).val();
   const T=truths();
-  // 영구 스탯 반영 (사실 판정 perm 카드)
+  // 영구 스탯 반영 (사실 판정 perm 카드 — 배정된 대상 기준)
   const mods=JSON.parse(JSON.stringify(state.statMods||{}));
+  const prevTg=state.cardTg||{};
   CARDS[r-1].forEach((c,i)=>{
-    if(c.perm&&T[`${r-1}_${i}`]){
-      mods[c.tg]=mods[c.tg]||{};
-      mods[c.tg][c.perm]=(mods[c.tg][c.perm]||0)+(c.e>0?1:-1);
-      log(`영구 반영: ${c.tg} ${c.perm} ${c.e>0?'+1':'-1'}`);
+    if(c.perm&&T[`${r-1}_${i}`]&&prevTg[i]){
+      const t=prevTg[i];
+      mods[t]=mods[t]||{};
+      mods[t][c.perm]=(mods[t][c.perm]||0)+(c.e>0?1:-1);
+      log(`영구 반영: ${t} ${c.perm} ${c.e>0?'+1':'-1'}`);
     }});
   const nr=r+1;
-  const field=nr>=6?FIELD2:FIELD1;
+  const field=pickField(state.seed,nr);
+  const fat=res&&field.includes(res.winner)?res.winner:null;
+  const tg=assignTargets(state.seed,nr,field,fat,mods);
   const secs=parseInt($('betSecs').value)||300;
   await db.ref(`${ROOT}/state`).update({phase:'open',round:nr,field,
-    fatigue:res?res.winner:null,statMods:mods,deadline:Date.now()+secs*1000,
+    fatigue:fat,statMods:mods,cardTg:tg,deadline:Date.now()+secs*1000,
     showRanking:r===5});
-  if(r===5)log('★ 중간 순위 공개 라운드 통과 — 스크린에 순위 표시');
-  if(nr===6)log('★ 교체 실행: 질풍 → 섬광');
-  log(`라운드 ${nr} 시작 (피로: ${res?res.winner:'-'})`);
+  await db.ref(`${ROOT}/cardTg/${nr}`).set(tg);
+  if(r===5)log('★ 중간 순위 공개 — 스크린에 표시');
+  log(`라운드 ${nr} 시작 — 출전: ${field.join(',')} (피로: ${fat||'-'}${res&&!field.includes(res.winner)?', 우승마 '+res.winner+' 휴식':''})`);
 }
 
 /* ════════ 경주 계산 + 정산 ════════ */
@@ -263,12 +345,14 @@ function baseScore(h){
   return b;
 }
 async function runRace(){
-  const r=state.round,T=truths();const field=state.field?Object.values(state.field):FIELD1;
+  const r=state.round,T=truths();const field=Object.values(state.field);
   const bases={},infos={},scores={};
   field.forEach(h=>{bases[h]=fmt(baseScore(h));infos[h]=0;});
+  const rtg=state.cardTg||{};
   CARDS[r-1].forEach((c,i)=>{
-    if(c.noeff||!field.includes(c.tg))return;
-    if(T[`${r-1}_${i}`])infos[c.tg]+=c.e;
+    const t=rtg[i];
+    if(c.noeff||!t||!field.includes(t))return;
+    if(T[`${r-1}_${i}`])infos[t]+=c.e;
   });
   field.forEach(h=>{infos[h]=Math.max(-12,Math.min(12,infos[h]));
     scores[h]=fmt(bases[h]+infos[h]+raceRng(state.seed,r,h));});
@@ -334,12 +418,13 @@ async function handleConsult(s){
   const uid=s.key,c=s.val();if(!c||!c.req||c.answer||!state)return;
   const T=truths();const r=c.round,h=c.horse;
   let est=baseScore(h);
+  const ctg=state.cardTg||{};
   CARDS[r-1].forEach((card,i)=>{
-    if(card.noeff||card.tg!==h||!card.pub)return;
+    if(card.noeff||ctg[i]!==h||!card.pub)return;
     if(T[`${r-1}_${i}`])est+=card.e;
   });
   est+=(Math.random()-0.5)*6; // 오차
-  const field=state.field?Object.values(state.field):FIELD1;
+  const field=Object.values(state.field);
   const others=field.filter(x=>x!==h).map(x=>baseScore(x));
   const rank=others.filter(o=>o>est).length+1;
   const tone=rank===1?'현재 컨디션과 조건을 종합하면 이번 경주 최상위권으로 봅니다.'
@@ -360,7 +445,7 @@ function togglePeek(){
   const T=truths();let html='';
   CARDS.forEach((rc,r)=>{
     html+=`<b>R${r+1}</b>: `;
-    html+=rc.map((c,i)=>c.noeff?null:`<span class="${T[`${r}_${i}`]?'truth-t':'truth-f'}">${c.tg}${c.e>0?'+':''}${c.e}</span>`)
+    html+=rc.map((c,i)=>c.noeff?null:`<span class="${T[`${r}_${i}`]?'truth-t':'truth-f'}">${c.m}${c.e>0?'+':''}${c.e}</span>`)
       .filter(Boolean).join(' · ')+'<br>';
   });
   $('peekBox').innerHTML=html;
