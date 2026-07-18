@@ -189,24 +189,28 @@ const CARDS=[
  {m:'광장',pub:0,t:'{말} 마지막까지 스태미나 버틸 수 있음?',e:-10},
  {m:'찌라시',pub:0,t:'최종전 승부 밀약설 — 우승마는 이미 정해져 있다? {말}이라 함.',e:10}]];
 
-let state=null,players={},results={},lastRendered='',clockT=null;
+let state=null,players={},results={},lastRendered='',clockT=null,NAMES={};
+const disp=h=>NAMES[h]||h;
 const C=document.getElementById('center'),RP=document.getElementById('rphase');
 const fmt=n=>Math.round(n*10)/10;
 db.ref(`${ROOT}/state`).on('value',s=>{state=s.val();render();});
 db.ref(`${ROOT}/players`).on('value',s=>{players=s.val()||{};if(state&&['lobby','final'].includes(state.phase))render(true);});
 db.ref(`${ROOT}/results`).on('value',s=>{results=s.val()||{};
   if(state&&(state.phase==='race'||state.phase==='result'))render(true);});
+db.ref(`${ROOT}/names`).on('value',s=>{NAMES=s.val()||{};render(true);});
 
 function autoText(){const r=state.round;const [d,mud]=SCHEDULE[r-1];
   let t=`제${r}경주 조건 확정: ${d==='단'?'단거리 1200m':d==='중'?'중거리 1800m':'장거리 2400m'}, 주로 ${mud?'불량':'양호'}.`;
   if(state.fatigue)t+=` 컨디션 공시 — ${state.fatigue}: 전 경주 피로 ▼`;return t;}
 function field(){return state.field?Object.values(state.field):[];}
-function tgOfCur(i){return (state&&state.cardTg||{})[i]||'?';}
+function tgOfCur(i){const t=(state&&state.cardTg||{})[i];return t?disp(t):'?';}
 function cardText(c,i){return c.auto?autoText():(c.t||'').replace(/\{말\}/g,tgOfCur(i));}
 
 function render(force){
-  if(!state){C.innerHTML='';return;}
-  const key=state.phase+'_'+state.round;
+  if(!state){lastRendered='';RP.textContent='';
+    C.innerHTML=`<h1 class="big">THE <span>RACE</span></h1>
+    <p class="subbig">⏳ 대기 중 — 관리자의 시즌 개시를 기다리고 있습니다</p>`;return;}
+  const key=state.phase+'_'+state.round+'_'+(state.seed||0);
   if(key===lastRendered&&!force)return;lastRendered=key;
   RP.textContent=state.round?`ROUND ${state.round} / 10`:'';
   const p=state.phase;
@@ -236,9 +240,9 @@ function renderOpen(){
   C.innerHTML=`${rankHtml}
   <div class="condbar">ROUND ${state.round} — ${d==='단'?'단거리 1200m':d==='중'?'중거리 1800m':'장거리 2400m'} · 주로 ${mud?'불량 ☔':'양호 ☀'}</div>
   <div style="display:flex;justify-content:center;gap:22px;margin:6px 0 14px">
-    ${field().map(h=>`<span style="font-family:'Black Han Sans';font-size:22px;color:${HORSES[h].c}">🐎 ${h}${state.fatigue===h?' ▼':''}</span>`).join('')}
+    ${field().map(h=>`<span style="font-family:'Black Han Sans';font-size:22px;color:${HORSES[h].c}">🐎 ${disp(h)}${state.fatigue===h?' ▼':''}</span>`).join('')}
   </div>
-  <p class="subbig" style="margin:0">마감까지</p>
+  <p class="subbig" style="margin:0" id="clockLabel">마감까지</p>
   <div class="clock" id="bigClock" style="font-size:120px">--:--</div>
   <div class="ticker" id="cycleTick"></div>
   <p class="subbig" style="font-size:16px">휴대폰에서 출마표 · 소식 · 상점 · 베팅을 자유롭게 — 최대 3마리 · 보유액 50%까지</p>`;
@@ -246,9 +250,13 @@ function renderOpen(){
   clockT=setInterval(()=>{
     if(!state||!state.deadline)return;
     const left=Math.max(0,Math.ceil((state.deadline-Date.now())/1000));
-    const el=document.getElementById('bigClock');
-    if(el){el.textContent=`${Math.floor(left/60)}:${String(left%60).padStart(2,'0')}`;
-      el.style.color=left<=30?'var(--down)':'var(--amber)';}
+    const el=document.getElementById('bigClock'),lb=document.getElementById('clockLabel');
+    if(!el)return;
+    if(left>0){el.textContent=`${Math.floor(left/60)}:${String(left%60).padStart(2,'0')}`;
+      el.style.color=left<=30?'var(--down)':'var(--amber)';
+      if(lb)lb.textContent='마감까지';}
+    else{el.textContent='마감';el.style.color='var(--down)';
+      if(lb)lb.textContent='⏱ 제한시간 종료 — 곧 경주가 시작됩니다';}
   },250);
   // 공개 소식 순환 티커
   const cards=CARDS[state.round-1].map((c,i)=>({c,i})).filter(x=>x.c.pub);let ti=0;
@@ -265,7 +273,9 @@ function renderOpen(){
   window._cycleT=setInterval(()=>{if(state&&state.phase==='open')cycle();},7000);
 }
 function renderRace(){
-  const res=results[state.round];if(!res){setTimeout(renderRace,500);return;}
+  const res=results[state.round];
+  if(!res){C.innerHTML='<p class="subbig" style="font-size:26px">🏇 경주 준비 중…</p>';
+    setTimeout(renderRace,500);return;}
   const f=res.field,order=res.order;
   const lapsPre={'단':1,'중':2,'장':3}[SCHEDULE[state.round-1][0]];
   const finRight=lapsPre%2===1;
@@ -273,7 +283,7 @@ function renderRace(){
     <div class="finishline" style="${finRight?'right:6%;left:auto':'left:6%;right:auto'}"></div>
     <div id="lapInd" style="position:absolute;top:8px;right:16px;font-family:'Chakra Petch',monospace;color:var(--amber);font-size:20px"></div>
     ${f.map(h=>`<div class="lane"><div class="runner" id="rn-${h}">
-      <span class="lb" style="color:${HORSES[h].c}">${h}</span><span class="em">🐎</span></div></div>`).join('')}
+      <span class="lb" style="color:${HORSES[h].c}">${disp(h)}</span><span class="em">🐎</span></div></div>`).join('')}
   </div><p class="subbig" id="raceMsg" style="margin-top:16px">출발 준비…</p>`;
 
   const FIN=88, N=140;
@@ -327,6 +337,9 @@ function renderRace(){
       const p=posOf(h,t);leadLap=Math.max(leadLap,p.lap);
       const el=document.getElementById('rn-'+h);
       if(el){el.style.left=p.x+'%';
+        // 질주감: 상하 미세 사인파 보빙 (결승 후 정지)
+        const bob=(t<T[h])?Math.sin((t+jitter[h])/140)*3:0;
+        el.style.transform=`translateY(${bob}px)`;
         const em=el.querySelector('.em');
         if(em)em.style.transform=p.right?'scaleX(-1)':'scaleX(1)';}
     });
@@ -334,7 +347,7 @@ function renderRace(){
     if(li)li.textContent=LAPS>1?`LAP ${leadLap+1}/${LAPS}`:'';
     if(t<totalDur)requestAnimationFrame(frame);
     else{const msg=document.getElementById('raceMsg');
-      if(msg)msg.innerHTML=`🏆 <b style="color:${HORSES[res.winner].c};font-size:26px">${res.winner}</b> 우승!`;}
+      if(msg)msg.innerHTML=`🏆 <b style="color:${HORSES[res.winner].c};font-size:26px">${disp(res.winner)}</b> 우승!`;}
   }
   requestAnimationFrame(frame);
 }
@@ -342,14 +355,14 @@ function renderResult(){
   const res=results[state.round];if(!res)return;
   const f=res.field,total=res.total||1;
   const maxPool=Math.max(...f.map(h=>res.pool[h]||0),1);
-  C.innerHTML=`<div class="winbanner"><span class="w" style="color:${HORSES[res.winner].c}">${res.winner}</span>
+  C.innerHTML=`<div class="winbanner"><span class="w" style="color:${HORSES[res.winner].c}">${disp(res.winner)}</span>
     <span class="w"> 우승</span><div class="o" id="oddsNum">배당 0.00배</div></div>
   <div class="oddsboard">${f.map(h=>`
-    <div class="orow"><span class="nm" style="color:${HORSES[h].c}">${h}${h===res.winner?' 🏆':''}</span>
+    <div class="orow"><span class="nm" style="color:${HORSES[h].c}">${disp(h)}${h===res.winner?' 🏆':''}</span>
     <div class="bar"><i id="bar-${h}" style="width:0;background:${HORSES[h].c}"></i></div>
     <span class="od">${res.pool[h]?fmt(res.pool[h])+'만':'—'}</span></div>`).join('')}
   </div>
-  <div class="calc">계산 근거 — ${f.map(h=>`${h}: 기본 ${res.bases[h]} ${res.infos[h]?(res.infos[h]>0?'+':'')+res.infos[h]+'(정보)':''} → ${res.scores[h]}점`).join(' | ')}</div>
+  <div class="calc">계산 근거 — ${f.map(h=>`${disp(h)}: 기본 ${res.bases[h]} ${res.infos[h]?(res.infos[h]>0?'+':'')+res.infos[h]+'(정보)':''} → ${res.scores[h]}점`).join(' | ')}</div>
   <div class="truths" id="truthChips"></div>`;
   setTimeout(()=>{f.forEach(h=>{const b=document.getElementById('bar-'+h);
     if(b)b.style.width=((res.pool[h]||0)/maxPool*100)+'%';});},300);

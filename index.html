@@ -135,7 +135,13 @@ button.ghost{padding:10px 12px;border:1px solid var(--line);border-radius:8px;ba
   <div id="v-lobby" class="hidden">
     <div class="card"><h3>대기실</h3>
       <p style="font-size:14px;color:var(--muted)">곧 시즌이 시작됩니다. 시작 자금 <b style="color:var(--amber)">100만원</b>,
-      10라운드 뒤 자금이 가장 많은 사람이 우승합니다.</p></div>
+      10라운드 뒤 자금이 가장 많은 사람이 우승합니다.</p>
+      <div style="display:flex;gap:8px;margin-top:12px">
+        <button class="ghost" style="flex:1" onclick="lobbyView('tuto')">📖 게임 방법</button>
+        <button class="ghost" style="flex:1" onclick="lobbyView('dex')">🐎 말 도감</button>
+      </div>
+    </div>
+    <div id="lobbyExtra"></div>
   </div>
 
   <!-- 라운드 진행: 탭 컨테이너 -->
@@ -275,8 +281,9 @@ const CARDS=[
 const PRICES={hidden:5,verify:10,expert:8};
 
 /* ════════ 상태 ════════ */
-let uid=null,me=null,state=null,results={},myBets={},myOwned={},myVerified={},cardTgAll={};
-let activeTab='race',selHorse=0,alloc={},insPick='',lastRound=0,lastPhase='';
+let uid=null,me=null,state=null,results={},myBets={},myOwned={},myVerified={},cardTgAll={},NAMES={};
+const disp=h=>NAMES[h]||h;
+let activeTab='race',selHorse=0,alloc={},lastRound=0,lastPhase='';
 const $=id=>document.getElementById(id);
 const toast=m=>{const t=$('toast');t.textContent=m;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2200)};
 const fmt=n=>Math.round(n*10)/10;
@@ -299,7 +306,9 @@ $('btnJoin').onclick=async()=>{
     const ref=db.ref(`${ROOT}/players/${uid}`);
     const snap=await ref.get();
     if(!snap.exists())await ref.set({name,money:100,welfareUsed:false,joinedAt:Date.now()});
+    $('joinStatus').innerHTML='🟢 입장 처리 중…';
     listen();
+    setTimeout(()=>{if(!me)$('joinStatus').innerHTML='🔴 입장이 지연되고 있습니다 — 새로고침 후 다시 시도해주세요';},3000);
   }catch(e){joinErr(e);}
 };
 firebase.auth().onAuthStateChanged(u=>{if(u&&!uid){uid=u.uid;
@@ -317,6 +326,8 @@ function listen(){
   db.ref(`${ROOT}/state`).on('value',s=>{state=s.val()||{phase:'lobby',round:0};render();});
   db.ref(`${ROOT}/cardTg`).on('value',s=>{cardTgAll=s.val()||{};
     if(state&&state.phase==='open')renderTab();});
+  db.ref(`${ROOT}/names`).on('value',s=>{NAMES=s.val()||{};
+    if(state&&state.phase==='open')renderTab();});
   db.ref(`${ROOT}/results`).on('value',s=>{results=s.val()||{};
     if(state&&(state.phase==='result'||state.phase==='final'))render(true);});
   db.ref(`${ROOT}/bets`).on('value',s=>{const b=s.val()||{};myBets={};
@@ -331,6 +342,36 @@ function listen(){
   setInterval(tick,300);
 }
 
+/* ════════ 대기실 콘텐츠 ════════ */
+function lobbyView(v){
+  const box=$('lobbyExtra');
+  if(v==='tuto'){
+    box.innerHTML=`<div class="card"><h3>게임 방법</h3>
+    <div style="font-size:13.5px;line-height:1.8;color:var(--chalk)">
+    <b style="color:var(--amber)">1. 매 라운드, 5마리가 출전합니다.</b> 거리(단/중/장)와 주로 상태에 따라 유불리가 달라집니다.<br>
+    <b style="color:var(--amber)">2. 소식 7건이 발행됩니다.</b> 공개 4건 + 숨은 3건(상점). 각 소식엔 매체의 <b>신뢰도</b>가 붙어 있습니다 — 그 매체가 사실을 말할 확률입니다. 진위는 경주 후 공개됩니다.<br>
+    <b style="color:var(--amber)">3. 상점.</b> 히든 정보·진위 판별·전문가 자문을 살 수 있습니다. 단, 쓴 만큼 베팅할 돈이 줄어듭니다.<br>
+    <b style="color:var(--amber)">4. 베팅.</b> 최대 3마리에 나눠서, 보유액의 50%까지. 마감 전까지 수정할 수 있습니다.<br>
+    <b style="color:var(--amber)">5. 배당은 마감 후 결정됩니다.</b> 전체 판돈을 우승마에 건 사람들이 나눠 갖습니다 — 다들 아는 강자에 몰리면, 이겨도 남는 게 없습니다.<br>
+    <b style="color:var(--amber)">6. 10라운드 종료 시 자금 1위가 우승.</b> 파산하면 1회에 한해 10만원을 지원받습니다.</div></div>`;
+  }else if(v==='dex'){
+    let html='<div class="card"><h3>말 도감 (전체 7마리 — 매 라운드 5마리 출전)</h3></div>';
+    Object.keys(HORSES).forEach(h=>{
+      const st=HORSES[h].s;
+      html+=`<div class="card" style="padding:13px 16px">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+          <span style="font-size:28px">🐎</span>
+          <div><div style="font-family:'Black Han Sans';font-size:19px;color:${HORSES[h].c}">${disp(h)}</div>
+          <div style="font-size:12px;color:var(--muted)">${HORSES[h].tag}</div></div></div>
+        <div class="statlist">${STATN.map((n,i)=>`
+          <div class="statrow"><span class="sn" style="font-size:13px">${n}</span>
+          <div class="sbar" style="height:10px"><i style="width:${st[i]*20}%;background:${HORSES[h].c}"></i></div>
+          <span class="sv" style="font-size:13px">${st[i]}</span></div>`).join('')}</div></div>`;
+    });
+    box.innerHTML=html;
+  }
+}
+
 /* ════════ 화면 전환 ════════ */
 const VIEWS=['join','lobby','round','race','result','final'];
 function show(v){VIEWS.forEach(x=>$('v-'+x).classList.toggle('hidden',x!==v));
@@ -339,12 +380,13 @@ const PHASEN={lobby:'대기',open:'자유 탐색 · 베팅',race:'경주 중',re
 function render(force){
   if(!me){show('join');return;}
   const p=state.phase||'lobby';
-  const key=p+'_'+state.round;
+  const key=p+'_'+state.round+'_'+(state.seed||0);
   $('pbRound').textContent=state.round||'-';$('pbPhase').textContent=PHASEN[p]||p;
   if(key===lastPhase&&!force)return;
   // 새 라운드 진입 시 베팅 상태 초기화(제출본이 있으면 그걸 로드)
-  if(state.round!==lastRound){lastRound=state.round;selHorse=0;activeTab='race';
-    const b=myBets[state.round];alloc=b?{...b.stakes}:{};insPick=b?(b.insurance||''):'';}
+  const roundKey=state.round+'_'+(state.seed||0);
+  if(roundKey!==lastRound){lastRound=roundKey;selHorse=0;activeTab='race';
+    const b=myBets[state.round];alloc=b?{...b.stakes}:{};}
   lastPhase=key;
   if(p==='lobby')show('lobby');
   else if(p==='open'){show('round');renderTab();}
@@ -396,10 +438,10 @@ function renderHorseTab(c){
   c.innerHTML=`
   <div class="condbanner">R${state.round} · ${d==='단'?'단거리 1200m':d==='중'?'중거리 1800m':'장거리 2400m'} · 주로 ${mud?'<span style="color:var(--down)">불량 ☔</span>':'양호 ☀'}
     <small>${d==='단'?'스타트가 승부를 가릅니다':d==='장'?'뒷심이 승부를 가릅니다':'균형이 승부를 가릅니다'}${mud?' · 적응력 낮은 말은 큰 페널티':''}</small></div>
-  <div class="hswitch">${f.map((x,i)=>`<button class="${i===selHorse?'on':''}" onclick="selHorse=${i};renderTab()" style="${i===selHorse?'':'color:'+HORSES[x].c}">${x}</button>`).join('')}</div>
+  <div class="hswitch">${f.map((x,i)=>`<button class="${i===selHorse?'on':''}" onclick="selHorse=${i};renderTab()" style="${i===selHorse?'':'color:'+HORSES[x].c}">${disp(x)}</button>`).join('')}</div>
   <div class="card hdetail">
     <div class="em">🐎</div>
-    <div class="nm" style="color:${HORSES[h].c}">${h}</div>
+    <div class="nm" style="color:${HORSES[h].c}">${disp(h)}</div>
     <div class="tag">${HORSES[h].tag}</div>
     <div class="cond ${fat?'dn':'ok'}">${fat?'▼ 전 경주 우승 피로':'● 컨디션 정상'}</div>
     <div class="statlist">${STATN.map((n,i)=>`
@@ -416,9 +458,9 @@ function renderHorseTab(c){
 /* ── 소식 ── */
 function cardHTML(c2,idx,opts={}){
   const m=MEDIA[c2.m];const tg=tgOf(state.round,idx);
-  const text=c2.auto?autoText():(c2.t||'').replace(/\{말\}/g,tg||'?');
+  const text=c2.auto?autoText():(c2.t||'').replace(/\{말\}/g,tg?disp(tg):'?');
   let eff=c2.noeff?'<div class="eff">확정 사실 · 판단의 기준으로 삼으세요</div>'
-    :`<div class="eff">사실일 경우 → <b class="${c2.e>0?'up':'dn'}">${tg||'?'} ${c2.e>0?'+':''}${c2.e}</b>${c2.perm?` <b class="${c2.e>0?'up':'dn'}">(${c2.perm} 영구)</b>`:''}</div>`;
+    :`<div class="eff">사실일 경우 → <b class="${c2.e>0?'up':'dn'}">${tg?disp(tg):'?'} ${c2.e>0?'+':''}${c2.e}</b>${c2.perm?` <b class="${c2.e>0?'up':'dn'}">(${c2.perm} 영구)</b>`:''}</div>`;
   let truth='';
   if(opts.truth!==undefined)truth=`<span class="${opts.truth?'truth-t':'truth-f'}">${opts.truth?'■ 사실':'□ 거짓'}</span>`;
   else if(myVerified[state.round]&&myVerified[state.round].idx===idx&&myVerified[state.round].answer!==undefined)
@@ -484,7 +526,7 @@ async function openVerify(){
   if(myVerified[r])return toast('판별권은 라운드당 1회');
   const cards=CARDS[r-1];const owned=myOwned[r]||{};
   const mine=cards.map((c,i)=>({c,i})).filter(x=>!x.c.noeff&&(x.c.pub||owned[x.i]));
-  const pick=prompt('진위를 확인할 소식 번호:\n'+mine.map((x,k)=>`${k+1}. [${MEDIA[x.c.m].name}] ${tgOf(r,x.i)||'?'} ${x.c.e>0?'+':''}${x.c.e}`).join('\n'));
+  const pick=prompt('진위를 확인할 소식 번호:\n'+mine.map((x,k)=>`${k+1}. [${MEDIA[x.c.m].name}] ${disp(tgOf(r,x.i))||'?'} ${x.c.e>0?'+':''}${x.c.e}`).join('\n'));
   const k=parseInt(pick)-1;if(isNaN(k)||!mine[k])return;
   if(!(await pay(PRICES.verify)))return toast('자금이 부족합니다');
   await db.ref(`${ROOT}/verified/${uid}/${r}`).set({idx:mine[k].i,req:Date.now()});
@@ -495,8 +537,9 @@ async function openExpert(){
   const r=state.round;
   const c=await db.ref(`${ROOT}/consult/${uid}`).get();
   if(c.exists()&&c.val().round===r)return toast('자문권은 라운드당 1회');
-  const pick=prompt('자문받을 말 이름: '+field().join(', '));
-  if(!pick||!field().includes(pick))return;
+  const inp=prompt('자문받을 말 이름: '+field().map(disp).join(', '));
+  const pick=field().find(h=>h===inp||disp(h)===(inp||'').trim());
+  if(!pick)return;
   if(!(await pay(PRICES.expert)))return toast('자금이 부족합니다');
   await db.ref(`${ROOT}/consult/${uid}`).set({round:r,horse:pick,req:Date.now()});
   await db.ref(`${ROOT}/log/shop/${r}/${uid}`).push({item:'expert',horse:pick,t:Date.now()});
@@ -504,24 +547,19 @@ async function openExpert(){
 }
 
 /* ── 베팅 (입력은 alloc 객체에 저장 — 재렌더에도 증발하지 않음) ── */
-function refundOf(){const b=myBets[state.round];return b?(b.total+(b.premium||0)):0;}
+function refundOf(){const b=myBets[state.round];return b?b.total:0;}
 function capNow(){return Math.floor((me.money+refundOf())*0.5);}
 function renderBetTab(c){
   const r=state.round;const f=field();const b=myBets[r];
   c.innerHTML=`
-  ${b?`<div class="mypick">✅ 제출된 베팅: <b>${Object.keys(b.stakes).map(h=>`${h} ${b.stakes[h]}만`).join(' · ')}</b>
-    ${b.insurance?` / 보험 ${b.insurance}`:''} — 마감 전까지 아래에서 수정 후 재제출할 수 있습니다.</div>`
+  ${b?`<div class="mypick">✅ 제출된 베팅: <b>${Object.keys(b.stakes).map(h=>`${disp(h)} ${b.stakes[h]}만`).join(' · ')}</b>
+    — 마감 전까지 아래에서 수정 후 재제출할 수 있습니다.</div>`
    :`<div class="notice">아직 베팅하지 않았습니다. 마감 전에 제출하세요!</div>`}
   <div class="card"><h3>베팅 — 최대 3마리 · 한도는 보유액의 50%</h3>
-    ${f.map(h=>`<div class="betrow"><span class="nm" style="color:${HORSES[h].c}">${h}</span>
+    ${f.map(h=>`<div class="betrow"><span class="nm" style="color:${HORSES[h].c}">${disp(h)}</span>
       <input type="number" inputmode="numeric" min="0" step="1" data-h="${h}" value="${alloc[h]||''}" placeholder="0"
        oninput="alloc[this.dataset.h]=+this.value||0;updateCapDisplay()"><span style="font-size:12px;color:var(--muted)">만</span></div>`).join('')}
     <div class="betsum"><span>합계 / 한도</span><span><b id="betTotal">0</b> / <span id="betCap">0</span>만</span></div>
-    <div style="margin:6px 0 2px;font-size:13px;color:var(--muted)">보험 (선택) — 빗나가면 그 베팅액의 50% 환급, 보험료 20%</div>
-    <select id="insSel" onchange="insPick=this.value">
-      <option value="">보험 없음</option>
-      ${f.map(h=>`<option value="${h}" ${insPick===h?'selected':''}>${h}에 보험</option>`).join('')}
-    </select>
     <button class="primary" id="btnBet" onclick="submitBet()">${b?'수정 재제출':'베팅 제출'}</button>
   </div>`;
   updateCapDisplay();
@@ -543,16 +581,13 @@ async function submitBet(){
   const refund=refundOf();
   const cap=Math.floor((me.money+refund)*0.5);
   if(total>cap)return toast(`한도(${cap}만)를 초과했습니다`);
-  const ins=insPick||null;
-  if(ins&&!stakes[ins])return toast('보험은 베팅한 말에만 걸 수 있습니다');
-  const premium=ins?fmt(stakes[ins]*0.2):0;
   // 이전 베팅 환불 + 새 베팅 차감을 한 번에
-  const need=total+premium-refund;
+  const need=total-refund;
   const res=await db.ref(`${ROOT}/players/${uid}/money`).transaction(m=>{
     if(m===null)return m;if(m<need)return;return fmt(m-need);});
   if(!(res.committed&&res.snapshot.val()!==null))return toast('자금이 부족합니다');
-  await db.ref(`${ROOT}/bets/${r}/${uid}`).set({stakes,insurance:ins,premium,total,t:Date.now()});
-  toast(`베팅 ${refund?'수정 ':''}완료 — ${total}만${ins?` (+보험료 ${premium}만)`:''}`);
+  await db.ref(`${ROOT}/bets/${r}/${uid}`).set({stakes,total,t:Date.now()});
+  toast(`베팅 ${refund?'수정 ':''}완료 — ${total}만`);
   renderTab();
 }
 
@@ -565,13 +600,13 @@ function renderResult(){
     const winner=res.winner;const odds=res.odds[winner]||0;let backTotal=0;
     html='<table class="paytable"><tr><th>말</th><th style="text-align:right">베팅</th><th style="text-align:right">결과</th></tr>';
     Object.keys(bet.stakes).forEach(h=>{
-      const won=h===winner;const back=won?fmt(bet.stakes[h]*odds):(bet.insurance===h?fmt(bet.stakes[h]*0.5):0);
+      const won=h===winner;const back=won?fmt(bet.stakes[h]*odds):0;
       backTotal+=back;
-      html+=`<tr><td style="color:${HORSES[h].c}">${h}${won?' 🏆':''}</td><td class="num">${bet.stakes[h]}만</td>
-        <td class="num" style="color:${back>0?'var(--up)':'var(--down)'}">${back>0?'+'+back:'0'}만${(!won&&bet.insurance===h&&back>0)?' (보험)':''}</td></tr>`;});
-    const net=fmt(backTotal-bet.total-(bet.premium||0));
+      html+=`<tr><td style="color:${HORSES[h].c}">${disp(h)}${won?' 🏆':''}</td><td class="num">${bet.stakes[h]}만</td>
+        <td class="num" style="color:${back>0?'var(--up)':'var(--down)'}">${back>0?'+'+back:'0'}만</td></tr>`;});
+    const net=fmt(backTotal-bet.total);
     html+=`</table><div class="bignum" style="margin-top:12px;color:${net>=0?'var(--up)':'var(--down)'}">${net>=0?'+':''}${net}만</div>
-      <p style="text-align:center;font-size:12px;color:var(--muted)">우승 ${res.winner} · 확정 배당 ${odds.toFixed(2)}배</p>`;
+      <p style="text-align:center;font-size:12px;color:var(--muted)">우승 ${disp(res.winner)} · 확정 배당 ${odds.toFixed(2)}배</p>`;
   }
   $('myPayout').innerHTML=html;
   let tf='';CARDS[r-1].forEach((c,i)=>{if(c.noeff)return;
@@ -608,9 +643,8 @@ function buildReport(){
     const p=softmax(subj,4);
     let ehr=0;Object.keys(bet.stakes).forEach(h=>ehr+=bet.stakes[h]/bet.total*(p[h]||0));
     const winner=res.winner;const odds=res.odds[winner]||0;
-    const back=(bet.stakes[winner]?bet.stakes[winner]*odds:0)
-      +((bet.insurance&&bet.insurance!==winner)?bet.stakes[bet.insurance]*0.5:0);
-    const profit=back-bet.total-(bet.premium||0)>0;
+    const back=bet.stakes[winner]?bet.stakes[winner]*odds:0;
+    const profit=back-bet.total>0;
     let jd;if(ehr>=0.30)jd='s';else if(ehr<0.20)jd='l';else jd='g';
     if(jd==='g')cells.gray++;else cells[jd+(profit?'s':'f')]++;
     betHist.push({r,total:bet.total,profit});
