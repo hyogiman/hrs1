@@ -309,6 +309,7 @@ function renderRace(){
     prof[h]=cum;
     T[h]=WINT + rankOf[h]*800 + Math.random()*250; // 최종 순위 = 결승선 통과 시각
   });
+  const jitter={};f.forEach(h=>jitter[h]=Math.random()*1000); // 보빙 위상차
   const COMM=[[0,'출발!! 스타트 좋은 말들이 먼저 치고 나갑니다'],
     [0.28,'초반 대열 형성 — 선행마들이 페이스를 끌고 갑니다'],
     [0.52,'중반전 — 이제부터는 스피드 싸움입니다'],
