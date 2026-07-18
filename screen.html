@@ -142,7 +142,7 @@ const PUBCARDS=[
   [2,'경마일보','만리, 시즌 장거리 지표 1위 — 데이터는 거짓말하지 않는다','만리',3],
   [3,'김패독','"마지막은 결국 뒷심 싸움입니다. 제 답은 정해져 있어요"','만리',5]]];
 
-let state=null,players={},results={},lastRendered='';
+let state=null,players={},results={},lastRendered='',clockT=null;
 const C=document.getElementById('center'),RP=document.getElementById('rphase');
 const fmt=n=>Math.round(n*10)/10;
 db.ref(`${ROOT}/state`).on('value',s=>{state=s.val();render();});
@@ -161,10 +161,7 @@ function render(force){
   RP.textContent=state.round?`ROUND ${state.round} / 10`:'';
   const p=state.phase;
   if(p==='lobby')renderLobby();
-  else if(p==='intro')renderIntro();
-  else if(p==='info')renderInfo();
-  else if(p==='shop')renderShop();
-  else if(p==='betting')renderBetting();
+  else if(p==='open')renderOpen();
   else if(p==='race')renderRace();
   else if(p==='result')renderResult();
   else if(p==='final')renderFinal();
@@ -175,7 +172,7 @@ function renderLobby(){
   <p class="subbig">불확실한 정보 앞에서, 나의 판단을 마주하는 시간</p>
   <p class="subbig" style="margin-top:30px">현재 입장 <b style="color:var(--amber)">${Object.keys(players).length}</b>명 — 휴대폰으로 접속해주세요</p>`;
 }
-function renderIntro(){
+function renderOpen(){
   const [d,mud]=SCHEDULE[state.round-1];
   let rankHtml='';
   if(state.showRanking){
@@ -183,37 +180,36 @@ function renderIntro(){
     rankHtml=`<div class="condbar" style="border-color:var(--line);color:var(--chalk);font-size:18px">
       중간 순위 (1회 공개) — ${all.map((a,i)=>`${i+1}위 ${a.n} ${fmt(a.m)}만`).join(' · ')}</div>`;
   }
-  C.innerHTML=`${rankHtml}<div class="condbar">ROUND ${state.round} — ${d==='단'?'단거리 1200m':d==='중'?'중거리 1800m':'장거리 2400m'} · 주로 ${mud?'불량 ☔':'양호 ☀'}</div>
-  <div class="hgrid">${field().map(h=>`
-    <div class="hcard"><div style="font-size:44px">🐎</div>
-    <div class="nm" style="color:${HORSES[h].c}">${h}</div>
-    <div class="tag">${HORSES[h].tag}</div>
-    <div class="cond ${state.fatigue===h?'dn':''}">${state.fatigue===h?'▼ 피로':'컨디션 정상'}</div></div>`).join('')}</div>`;
-}
-function renderInfo(){
-  const cards=PUBCARDS[state.round-1];
-  C.innerHTML=`<div class="ticker">${cards.map(([i,m,t,tg,e])=>`
-    <div class="tick" id="tk${i}"><div class="src"><span>${MEDIA[m].name}</span>
-    <span class="rel">신뢰도 ${Math.round(MEDIA[m].rel*100)}%</span></div>
-    <div class="body">${t==='AUTO'?autoText():t}</div>
-    ${tg?`<div class="eff">사실일 경우 → <b class="${e>0?'up':'dn'}">${tg} ${e>0?'+':''}${e}</b></div>`:'<div class="eff">확정 사실</div>'}</div>`).join('')}</div>`;
-  cards.forEach(([i],k)=>setTimeout(()=>{const el=document.getElementById('tk'+i);if(el)el.classList.add('on');},600+k*1800));
-}
-function renderShop(){
-  C.innerHTML=`<h1 class="big">작전 타임 <span>·</span> 정보 상점</h1>
-  <p class="subbig">확신을 살 것인가, 판돈을 지킬 것인가 — 구매 내역은 서로 보이지 않습니다</p>`;
-}
-let clockT=null;
-function renderBetting(){
-  C.innerHTML=`<p class="subbig">베팅 마감까지</p><div class="clock" id="bigClock">--</div>
-  <p class="subbig">최대 3마리 · 보유액의 50%까지 · 배당은 마감 후 공개됩니다</p>`;
+  C.innerHTML=`${rankHtml}
+  <div class="condbar">ROUND ${state.round} — ${d==='단'?'단거리 1200m':d==='중'?'중거리 1800m':'장거리 2400m'} · 주로 ${mud?'불량 ☔':'양호 ☀'}</div>
+  <div style="display:flex;justify-content:center;gap:22px;margin:6px 0 14px">
+    ${field().map(h=>`<span style="font-family:'Black Han Sans';font-size:22px;color:${HORSES[h].c}">🐎 ${h}${state.fatigue===h?' ▼':''}</span>`).join('')}
+  </div>
+  <p class="subbig" style="margin:0">마감까지</p>
+  <div class="clock" id="bigClock" style="font-size:120px">--:--</div>
+  <div class="ticker" id="cycleTick"></div>
+  <p class="subbig" style="font-size:16px">휴대폰에서 출마표 · 소식 · 상점 · 베팅을 자유롭게 — 최대 3마리 · 보유액 50%까지</p>`;
   if(clockT)clearInterval(clockT);
   clockT=setInterval(()=>{
     if(!state||!state.deadline)return;
     const left=Math.max(0,Math.ceil((state.deadline-Date.now())/1000));
-    const el=document.getElementById('bigClock');if(el)el.textContent=left;
-    if(left===0)clearInterval(clockT);
+    const el=document.getElementById('bigClock');
+    if(el){el.textContent=`${Math.floor(left/60)}:${String(left%60).padStart(2,'0')}`;
+      el.style.color=left<=30?'var(--down)':'var(--amber)';}
   },250);
+  // 공개 소식 순환 티커
+  const cards=PUBCARDS[state.round-1];let ti=0;
+  function cycle(){
+    const box=document.getElementById('cycleTick');if(!box)return;
+    const [i,m,t,tg,e]=cards[ti%cards.length];
+    box.innerHTML=`<div class="tick on"><div class="src"><span>${MEDIA[m].name}</span>
+      <span class="rel">신뢰도 ${Math.round(MEDIA[m].rel*100)}%</span></div>
+      <div class="body">${t==='AUTO'?autoText():t}</div>
+      ${tg?`<div class="eff">사실일 경우 → <b class="${e>0?'up':'dn'}">${tg} ${e>0?'+':''}${e}</b></div>`:'<div class="eff">확정 사실</div>'}</div>`;
+    ti++;
+  }
+  cycle();if(window._cycleT)clearInterval(window._cycleT);
+  window._cycleT=setInterval(()=>{if(state&&state.phase==='open')cycle();},7000);
 }
 function renderRace(){
   const res=results[state.round];if(!res){setTimeout(renderRace,500);return;}
@@ -222,21 +218,26 @@ function renderRace(){
     ${f.map(h=>`<div class="lane"><div class="runner" id="rn-${h}">
       <span class="lb" style="color:${HORSES[h].c}">${h}</span><span class="em">🐎</span></div></div>`).join('')}
   </div><p class="subbig" id="raceMsg" style="margin-top:16px">출발!</p>`;
-  const DUR=9000,FIN=88;
+  const DUR=24000,FIN=88;
+  const COMM=[[0,'출발했습니다!'],[5000,'초반 선두 다툼이 치열합니다'],[10000,'중반전 — 대열이 길게 늘어섭니다'],
+    [15000,'후반 승부처! 뒷심 싸움이 시작됩니다'],[19500,'마지막 직선 주로!! 격차가 좁혀집니다'],[22000,'결승선 앞 대접전!!!']];
   const rankOf={};order.forEach((h,i)=>rankOf[h]=i);
   const start=performance.now();
-  const jitter={};f.forEach(h=>jitter[h]=Math.random()*1000);
+  const jitter={};f.forEach(h=>jitter[h]=Math.random()*2000);
+  let ci=0;
   function frame(now){
-    const t=now-start;let done=0;
+    const t=now-start;
+    while(ci<COMM.length&&t>=COMM[ci][0]){
+      const msg=document.getElementById('raceMsg');if(msg)msg.textContent=COMM[ci][1];ci++;}
     f.forEach(h=>{
-      const finishT=DUR*(0.78+rankOf[h]*0.05);
+      const finishT=DUR*(0.90+rankOf[h]*0.022);
       let prog=Math.min(1,t/finishT);
-      const wob=Math.sin((t+jitter[h])/300)*0.8*(1-prog);
+      // 중반까지는 순위가 섞여 보이도록 큰 진동, 종반에 수렴
+      const wob=Math.sin((t+jitter[h])/700)*4.5*Math.pow(1-prog,1.5);
       const x=1+prog*(FIN-1)+wob;
-      const el=document.getElementById('rn-'+h);if(el)el.style.left=x+'%';
-      if(prog>=1)done++;
+      const el=document.getElementById('rn-'+h);if(el)el.style.left=Math.max(1,x)+'%';
     });
-    if(t<DUR*1.15)requestAnimationFrame(frame);
+    if(t<DUR*1.08)requestAnimationFrame(frame);
     else{const msg=document.getElementById('raceMsg');
       if(msg)msg.innerHTML=`🏆 <b style="color:${HORSES[res.winner].c};font-size:26px">${res.winner}</b> 우승!`;}
   }
