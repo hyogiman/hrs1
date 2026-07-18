@@ -375,7 +375,7 @@ function renderResult(){
   // 진위 공개
   const chips=Object.keys(res.truths||{}).map(i=>{
     const c=CARDS[state.round-1][i];
-    const label=`${tgOfCur(i)} ${c.e>0?'+':''}${c.e} (${MEDIA[c.m].name})`;
+    const label=`${c.pub?'':'🔒 '}${tgOfCur(i)} ${c.e>0?'+':''}${c.e} (${MEDIA[c.m].name})`;
     return `<span class="tchip ${res.truths[i]?'t':'f'}">${res.truths[i]?'■ 사실':'□ 거짓'} — ${label}</span>`;
   }).join('');
   setTimeout(()=>{document.getElementById('truthChips').innerHTML=chips;},2500);

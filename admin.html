@@ -52,15 +52,20 @@ td.num{font-family:'Chakra Petch',monospace;color:var(--amber);text-align:right}
 <!-- ══ 진행 ══ -->
 <div class="sect on" id="sec-run">
   <div class="card"><h2>시즌</h2>
-    <input id="seedInput" placeholder="시드 (비우면 랜덤)" style="width:160px">
-    <button onclick="startSeason()">시즌 개시</button>
+    <button onclick="startSeason()">새 시즌 시작</button>
     <div class="small" style="margin-top:6px">개시 시 전원 100만원 리셋 · 진위/출전/카드대상 새로 배정</div>
   </div>
   <div class="card"><h2>라운드 진행</h2>
     <button class="go" id="btnNext" onclick="nextPhase()">먼저 시즌 개시 필요</button>
     <div style="margin-top:10px">라운드 시간 <input id="betSecs" value="300" style="width:64px">초
-      <button onclick="extendTime()">+60초 연장</button></div>
-    <div class="small" style="margin-top:8px">흐름: 라운드 진행(참가자 자유 탐색·베팅) → ① 마감·경주 → ② 정산 → ③ 다음 라운드</div>
+      <button onclick="extendTime()">+60초 연장</button>
+      <button id="btnAuto" onclick="toggleAuto()">▶ 자동모드 켜기</button></div>
+    <div class="small" id="autoMsg" style="margin-top:6px;color:var(--amber)"></div>
+    <div class="small" style="margin-top:8px">흐름: 라운드 진행(참가자 자유 탐색·베팅) → ① 마감·경주 → ② 정산 → ③ 다음 라운드<br>
+    자동모드: 베팅 마감 10초 후 경주 시작 → 레이스 연출 종료 10초 후 정산 공개. 다음 라운드 시작은 항상 수동.</div>
+  </div>
+  <div class="card"><h2>실시간 베팅 현황</h2>
+    <div id="betBoard" class="small">시즌 없음</div>
   </div>
 </div>
 
@@ -92,6 +97,15 @@ td.num{font-family:'Chakra Petch',monospace;color:var(--amber);text-align:right}
 
 <!-- ══ 도구 ══ -->
 <div class="sect" id="sec-tools">
+  <div class="card"><h2>입장코드</h2>
+    <input id="entryCode" placeholder="비우면 코드 없이 입장 가능" maxlength="12" style="width:200px">
+    <button onclick="saveEntryCode()">저장</button>
+    <div class="small" style="margin-top:6px">저장 즉시 적용. 설정 시 새 참가자는 입장할 때 이 코드를 입력해야 합니다.</div>
+  </div>
+  <div class="card"><h2>시드 고정 (테스트용)</h2>
+    <input id="seedInput" placeholder="비우면 랜덤" style="width:160px">
+    <div class="small" style="margin-top:6px">값을 넣고 시즌을 시작하면 진위·출전 시퀀스가 동일하게 재현됩니다.</div>
+  </div>
   <div class="card"><h2>진위 미리보기</h2>
     <button onclick="togglePeek()" id="btnPeek">열기 (기본 봉인)</button>
     <div id="peekBox" class="small" style="margin-top:8px"></div>
@@ -270,15 +284,22 @@ function genTruth(seed){
   const byMedia={};
   CARDS.forEach((rc,r)=>rc.forEach((c,i)=>{
     if(c.m==='공시')return;
-    (byMedia[c.m]=byMedia[c.m]||[]).push({r,i,anchor:c.anchor});
+    (byMedia[c.m]=byMedia[c.m]||[]).push({r,i,anchor:c.anchor,hid:!c.pub});
   }));
   const truth={};
   Object.keys(byMedia).forEach(m=>{
     const list=byMedia[m];let need=QUOTA[m];
     list.forEach(x=>{if(x.anchor){truth[`${x.r}_${x.i}`]=true;need--;}});
-    const rest=list.filter(x=>!x.anchor);
-    for(let i=rest.length-1;i>0;i--){const j=Math.floor(rng()*(i+1));[rest[i],rest[j]]=[rest[j],rest[i]];}
-    rest.forEach((x,k)=>truth[`${x.r}_${x.i}`]=k<need);
+    // 히든(상점 전용) 카드에 사실을 우선 배정 — 유료 정보의 사실 비율 상향
+    const hid=list.filter(x=>!x.anchor&&x.hid);
+    const pub=list.filter(x=>!x.anchor&&!x.hid);
+    [hid,pub].forEach(a=>{for(let i=a.length-1;i>0;i--){const j=Math.floor(rng()*(i+1));[a[i],a[j]]=[a[j],a[i]];}});
+    const merged=[];
+    while(hid.length||pub.length){
+      const pickHid=hid.length>0&&(pub.length===0||rng()<0.85);
+      merged.push(pickHid?hid.shift():pub.shift());
+    }
+    merged.forEach((x,k)=>truth[`${x.r}_${x.i}`]=k<need);
   });
   return truth;
 }
@@ -289,10 +310,15 @@ function raceRng(seed,round,horse){
 
 /* ════════ 상태 ════════ */
 let state=null,players={},bets={},truthCache=null;
-db.ref(`${ROOT}/state`).on('value',s=>{state=s.val();truthCacheCheck();renderStatus();});
+let raceAt=0;
+db.ref(`${ROOT}/state`).on('value',s=>{
+  const prevPhase=state?state.phase:'';
+  state=s.val();
+  if(state&&state.phase==='race'&&prevPhase!=='race')raceAt=Date.now();
+  truthCacheCheck();renderStatus();renderBetBoard();});
 db.ref(`${ROOT}/players`).on('value',s=>{players=s.val()||{};renderPlayers();});
-db.ref(`${ROOT}/bets`).on('value',s=>{bets=s.val()||{};renderPlayers();});
-db.ref(`${ROOT}/names`).on('value',s=>{NAMES=s.val()||{};renderNameRows();renderFieldRows();renderPlayers();});
+db.ref(`${ROOT}/bets`).on('value',s=>{bets=s.val()||{};renderPlayers();renderBetBoard();});
+db.ref(`${ROOT}/names`).on('value',s=>{NAMES=s.val()||{};renderNameRows();renderFieldRows();renderPlayers();renderBetBoard();});
 let cachedSeed=null;
 function truthCacheCheck(){if(state&&state.seed!==cachedSeed){truthCache=null;cachedSeed=state?state.seed:null;}}
 function truths(){if(!truthCache&&state&&state.seed!==undefined)truthCache=genTruth(state.seed);return truthCache;}
@@ -308,15 +334,36 @@ function renderStatus(){
 }
 function renderPlayers(){
   const t=$('pTable');const sel=$('grantWho');
-  let rows='<tr><th>이름</th><th style="text-align:right">자금</th><th>베팅</th><th>구제</th></tr>';
+  let rows='<tr><th>이름</th><th style="text-align:right">자금</th><th>베팅 내역</th><th>구제</th></tr>';
   let opts='';const r=state?state.round:0;
   Object.keys(players).forEach(id=>{
     const p=players[id];const b=bets[r]&&bets[r][id];
+    const detail=b?Object.keys(b.stakes||{}).map(h=>`${disp(h)} ${b.stakes[h]}`).join(' · ')+` <b style="color:var(--amber)">(계 ${b.total}만)</b>`:'—';
     rows+=`<tr><td>${p.name}</td><td class="num">${fmt(p.money)}</td>
-      <td>${b?'✅ '+b.total+'만':'—'}</td><td>${p.welfareUsed?'사용':''}</td></tr>`;
+      <td style="font-size:12px">${detail}</td><td>${p.welfareUsed?'사용':''}</td></tr>`;
     opts+=`<option value="${id}">${p.name}</option>`;
   });
   t.innerHTML=rows;sel.innerHTML=opts;$('pCount').textContent=Object.keys(players).length;
+}
+function renderBetBoard(){
+  const box=$('betBoard');if(!box)return;
+  if(!state||!state.round){box.textContent='시즌 없음';return;}
+  const r=state.round,rb=bets[r]||{};
+  const f=state.field?Object.values(state.field):[];
+  const pool={};let total=0;f.forEach(h=>pool[h]=0);
+  Object.keys(rb).forEach(id=>{const b=rb[id];
+    Object.keys(b.stakes||{}).forEach(h=>{pool[h]=(pool[h]||0)+b.stakes[h];total+=b.stakes[h];});});
+  let html=`R${r} · 총 판돈 <b style="color:var(--amber)">${fmt(total)}만</b> · 베팅 제출 ${Object.keys(rb).length}명
+    <span style="color:var(--muted)">(${state.phase==='open'?'마감 전 — 예상 배당':'마감 후'})</span>
+    <table style="margin-top:6px"><tr><th style="text-align:left">말</th><th style="text-align:right">판돈</th><th style="text-align:right">비중</th><th style="text-align:right">배당(15배 캡)</th></tr>`;
+  f.forEach(h=>{
+    const p=pool[h]||0;
+    const odds=p>0?Math.min(total/p,15):0;
+    html+=`<tr><td>${disp(h)}</td><td class="num">${p?fmt(p)+'만':'—'}</td>
+      <td class="num">${total&&p?Math.round(p/total*100)+'%':'—'}</td>
+      <td class="num">${p?fmt(odds)+'배':'—'}</td></tr>`;});
+  html+='</table>';
+  box.innerHTML=html;
 }
 
 /* ════════ 탭 ════════ */
@@ -521,6 +568,53 @@ async function handleConsult(s){
   const answer=`${disp(h)}에 대한 소견 — ${tone} (숨은 소식은 반영되지 않은 평가이며, 제 눈에도 오차는 있습니다.)`;
   await db.ref(`${ROOT}/consult/${uid}/answer`).set(answer);
   log(`자문 응답: ${players[uid]?players[uid].name:uid} → ${disp(h)}`);
+}
+
+/* ════════ 자동모드 ════════ */
+let auto=false,autoMark=0,autoStage='',autoDoneKey='';
+function toggleAuto(){
+  auto=!auto;autoStage='';autoMark=0;
+  $('btnAuto').textContent=auto?'⏸ 자동모드 끄기':'▶ 자동모드 켜기';
+  $('autoMsg').textContent=auto?'자동모드 대기 중':'';
+  log(auto?'자동모드 ON':'자동모드 OFF');
+}
+setInterval(autoTick,400);
+function autoTick(){
+  if(!auto)return;
+  const msg=$('autoMsg');
+  if(!state||!state.round){msg.textContent='자동: 시즌 없음';return;}
+  const key=state.round+'-'+state.phase;
+  if(state.phase==='open'){
+    if(!state.deadline||Date.now()<=state.deadline){autoStage='';msg.textContent='자동: 베팅 마감 대기 중';return;}
+    if(autoDoneKey===key)return;
+    if(autoStage!=='cd'){autoStage='cd';autoMark=Date.now()+10000;}
+    const s=Math.ceil((autoMark-Date.now())/1000);
+    if(s>0){msg.textContent=`자동: ${s}초 후 베팅 마감 · 경주 시작`;return;}
+    autoDoneKey=key;autoStage='';
+    msg.textContent='자동: 경주 계산 중…';
+    runRace();
+  }else if(state.phase==='race'){
+    if(!raceAt)raceAt=Date.now(); // 새로고침 등으로 시작 시각을 모르면 지금부터 다시 대기
+    const dur={'단':13,'중':20,'장':27}[SCHEDULE[state.round-1][0]]+7; // 연출+우승 배너 여유
+    const s=Math.ceil((raceAt+(dur+10)*1000-Date.now())/1000);
+    if(s>0){msg.textContent=`자동: ${s}초 후 정산 공개`;return;}
+    if(autoDoneKey===key)return;
+    autoDoneKey=key;
+    msg.textContent='자동: 정산 공개됨';
+    db.ref(`${ROOT}/state/phase`).set('result');log('정산 공개 (자동)');
+  }else if(state.phase==='result'){
+    msg.textContent='자동: 대기 — [다음 라운드]는 수동으로 시작하세요';
+  }else{msg.textContent='';}
+}
+
+/* ════════ 입장코드 ════════ */
+db.ref(`${ROOT}/config/entryCode`).on('value',s=>{
+  const el=$('entryCode');if(!el)return;
+  if(document.activeElement!==el)el.value=s.val()||'';});
+async function saveEntryCode(){
+  const v=($('entryCode').value||'').trim();
+  try{await db.ref(`${ROOT}/config/entryCode`).set(v||null);}catch(e){dbError(e);return;}
+  log(v?`입장코드 설정: ${v}`:'입장코드 해제 — 누구나 입장 가능');
 }
 
 /* ════════ 진위 미리보기 / 수동 지급 ════════ */
