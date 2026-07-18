@@ -349,6 +349,7 @@ function render(force){
   else if(p==='race')show('race');
   else if(p==='result'){show('result');renderResult();}
   else if(p==='final'){show('final');renderFinal();}
+  else show('lobby'); // 구버전 페이즈 등 알 수 없는 상태 → 대기실
 }
 function tick(){
   const el=$('pbClock');if(!el)return;

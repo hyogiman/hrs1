@@ -147,7 +147,8 @@ const C=document.getElementById('center'),RP=document.getElementById('rphase');
 const fmt=n=>Math.round(n*10)/10;
 db.ref(`${ROOT}/state`).on('value',s=>{state=s.val();render();});
 db.ref(`${ROOT}/players`).on('value',s=>{players=s.val()||{};if(state&&['lobby','final'].includes(state.phase))render(true);});
-db.ref(`${ROOT}/results`).on('value',s=>{results=s.val()||{};});
+db.ref(`${ROOT}/results`).on('value',s=>{results=s.val()||{};
+  if(state&&(state.phase==='race'||state.phase==='result'))render(true);});
 
 function autoText(){const r=state.round;const [d,mud]=SCHEDULE[r-1];
   let t=`제${r}경주 조건 확정: ${d==='단'?'단거리 1200m':d==='중'?'중거리 1800m':'장거리 2400m'}, 주로 ${mud?'불량':'양호'}.`;
@@ -165,6 +166,9 @@ function render(force){
   else if(p==='race')renderRace();
   else if(p==='result')renderResult();
   else if(p==='final')renderFinal();
+  else C.innerHTML=`<h1 class="big">THE <span>RACE</span></h1>
+    <p class="subbig">이전 버전의 게임 상태가 남아 있습니다 (phase: ${p})</p>
+    <p class="subbig">관리자 페이지에서 <b style="color:var(--amber)">[시즌 개시]</b>를 눌러 새 시즌을 시작해주세요</p>`;
 }
 
 function renderLobby(){
