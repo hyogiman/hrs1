@@ -101,9 +101,17 @@ firebase.auth().signInAnonymously().catch(e=>{
       :'firebaseConfig 값을 확인하세요 ('+e.code+')'}</p>`;
 });
 
-const HORSES={'질풍':{c:'#C9D6DF',tag:'단거리 스타트 괴물'},'만리':{c:'#3D7BE4',tag:'장거리 대기만성'},
- '중용':{c:'#D9A62E',tag:'올라운더'},'우직':{c:'#8A5A36',tag:'악천후의 철마'},
- '적토':{c:'#D94A3D',tag:'맑은 날의 절대자'},'섬광':{c:'#EFE14A',tag:'검증 없는 신마'},'현무':{c:'#5A6B78',tag:'내구형 예비마'}};
+const HORSES={ // s:[스피드,스타트,뒷심,적응력,기수]
+ '질풍':{s:[4,5,1,2,3],c:'#C9D6DF',tag:'단거리 스타트 괴물'},
+ '만리':{s:[3,1,5,3,3],c:'#3D7BE4',tag:'장거리 대기만성'},
+ '중용':{s:[4,3,3,2,3],c:'#D9A62E',tag:'올라운더'},
+ '우직':{s:[3,2,3,5,2],c:'#8A5A36',tag:'악천후의 철마'},
+ '적토':{s:[5,4,3,2,1],c:'#D94A3D',tag:'맑은 날의 절대자'},
+ '섬광':{s:[4,4,2,1,4],c:'#EFE14A',tag:'검증 없는 신마'},
+ '현무':{s:[3,2,4,2,4],c:'#5A6B78',tag:'내구형 예비마'}};
+const STATN2=['스피드','스타트','뒷심','적응력','기수'];
+function effStats2(h){const st=[...HORSES[h].s];const mods=(state&&state.statMods||{})[h]||{};
+  STATN2.forEach((n,i)=>{if(mods[n])st[i]=Math.max(1,Math.min(5,st[i]+mods[n]));});return st;}
 const SCHEDULE=[['중',0],['단',0],['장',0],['중',1],['단',0],['장',1],['중',0],['단',1],['중',0],['장',0]];
 const MEDIA={'공시':{rel:1,name:'중앙경마협회 공식공시'},'경마일보':{rel:.85,name:'경마일보'},
  '김패독':{rel:.70,name:'김패독의 새벽조교'},'터프':{rel:.50,name:'주간 터프'},
@@ -221,27 +229,52 @@ function renderRace(){
   C.innerHTML=`<div class="trackbox"><div class="finishline"></div>
     ${f.map(h=>`<div class="lane"><div class="runner" id="rn-${h}">
       <span class="lb" style="color:${HORSES[h].c}">${h}</span><span class="em">🐎</span></div></div>`).join('')}
-  </div><p class="subbig" id="raceMsg" style="margin-top:16px">출발!</p>`;
-  const DUR=24000,FIN=88;
-  const COMM=[[0,'출발했습니다!'],[5000,'초반 선두 다툼이 치열합니다'],[10000,'중반전 — 대열이 길게 늘어섭니다'],
-    [15000,'후반 승부처! 뒷심 싸움이 시작됩니다'],[19500,'마지막 직선 주로!! 격차가 좁혀집니다'],[22000,'결승선 앞 대접전!!!']];
+  </div><p class="subbig" id="raceMsg" style="margin-top:16px">출발 준비…</p>`;
+
+  const FIN=88, N=140;
   const rankOf={};order.forEach((h,i)=>rankOf[h]=i);
-  const start=performance.now();
-  const jitter={};f.forEach(h=>jitter[h]=Math.random()*2000);
-  let ci=0;
+  // ── 스탯 기반 속도 프로필: 초반=스타트, 중반=스피드, 종반=뒷심 ──
+  // 전진 전용(속도는 항상 양수, 위치는 누적합) → 뒤로 가는 움직임이 원리적으로 불가능
+  const prof={},T={};
+  f.forEach(h=>{
+    const st=effStats2(h); // [스피드,스타트,뒷심,...]
+    const cum=[0];
+    for(let i=0;i<N;i++){
+      const u=(i+0.5)/N;
+      const wStart=Math.exp(-Math.pow((u-0.06)/0.16,2)); // 초반 가중
+      const wMid  =Math.exp(-Math.pow((u-0.50)/0.30,2)); // 중반 가중
+      const wLate =Math.exp(-Math.pow((u-0.94)/0.16,2)); // 종반 가중
+      let v=0.9 + 1.5*(st[1]/5)*wStart + 0.8*(st[0]/5)*wMid + 1.7*(st[2]/5)*wLate;
+      v*=0.92+0.16*Math.random(); // 미세 완급 (전진 전용 유지)
+      cum.push(cum[i]+v);
+    }
+    prof[h]=cum;
+    T[h]=21000 + rankOf[h]*800 + Math.random()*250; // 최종 순위 = 결승선 통과 시각
+  });
+  const COMM=[[0,'출발!! 스타트 좋은 말들이 먼저 치고 나갑니다'],
+    [6000,'초반 대열 형성 — 선행마들이 페이스를 끌고 갑니다'],
+    [11000,'중반전 — 이제부터는 스피드 싸움입니다'],
+    [15500,'후반 승부처! 뒷심 있는 말들이 무섭게 따라붙습니다'],
+    [19500,'마지막 직선 주로!! 격차가 좁혀집니다'],
+    [22000,'결승선 앞 대접전!!!']];
+  const start=performance.now();let ci=0;
+  const totalDur=Math.max(...f.map(h=>T[h]))+1600;
+  function posOf(h,t){
+    const u=Math.min(1,t/T[h]);
+    const cum=prof[h];const x=u*N;
+    const i=Math.min(N-1,Math.floor(x));const fr=x-i;
+    const c=cum[i]+(cum[i+1]-cum[i])*fr;
+    return 1+(c/cum[N])*(FIN-1);
+  }
   function frame(now){
     const t=now-start;
     while(ci<COMM.length&&t>=COMM[ci][0]){
       const msg=document.getElementById('raceMsg');if(msg)msg.textContent=COMM[ci][1];ci++;}
     f.forEach(h=>{
-      const finishT=DUR*(0.90+rankOf[h]*0.022);
-      let prog=Math.min(1,t/finishT);
-      // 중반까지는 순위가 섞여 보이도록 큰 진동, 종반에 수렴
-      const wob=Math.sin((t+jitter[h])/700)*4.5*Math.pow(1-prog,1.5);
-      const x=1+prog*(FIN-1)+wob;
-      const el=document.getElementById('rn-'+h);if(el)el.style.left=Math.max(1,x)+'%';
+      const el=document.getElementById('rn-'+h);
+      if(el)el.style.left=posOf(h,t)+'%';
     });
-    if(t<DUR*1.08)requestAnimationFrame(frame);
+    if(t<totalDur)requestAnimationFrame(frame);
     else{const msg=document.getElementById('raceMsg');
       if(msg)msg.innerHTML=`🏆 <b style="color:${HORSES[res.winner].c};font-size:26px">${res.winner}</b> 우승!`;}
   }
