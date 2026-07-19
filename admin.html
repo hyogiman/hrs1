@@ -103,6 +103,7 @@ td.num{font-family:'Chakra Petch',monospace;color:var(--amber);text-align:right}
       <button onclick="removeBots()">전원 제거</button>
       <button id="btnBotActive" onclick="toggleBots()">참여 ON</button></div>
     <div class="small" id="botMsg" style="margin-top:6px">현재 봇 0명</div>
+    <div id="botRoster" style="margin-top:10px"></div>
     <div class="small" style="margin-top:6px">봇은 공개 소식과 매체 신뢰도만으로 판단합니다 — 진위는 알지 못합니다.
       성향(분석·신중·공격·정보·군중·역발상)에 따라 베팅 규모와 대상이 달라지며, 마감 전 임의 시점에 베팅합니다.
       [참여 OFF]로 두면 명단에 남되 베팅하지 않습니다.</div>
@@ -676,6 +677,22 @@ const PERSONA={
   '역발상':{tau:3.5,skew:1.0,stake:0.75,horses:2,buy:0.25,value:1,herd:-1,late:0.8}
 };
 const PK=Object.keys(PERSONA);
+const PDESC={
+  '분석형':'수치와 배당을 함께 따진다. 기대값이 맞으면 인기와 무관하게 건다',
+  '신중형':'출처가 약한 소식은 크게 깎아 듣는다. 여러 마리에 나눠 걸어 위험을 줄인다',
+  '공격형':'확신이 서면 한 마리에 몰아넣는다. 크게 잃고 크게 딴다',
+  '정보형':'돈을 들여서라도 숨은 소식을 사 모은다. 정보에 값을 치르는 쪽',
+  '군중형':'남들이 몰리는 쪽을 신뢰한다. 마감 직전에 판돈 흐름을 보고 움직인다',
+  '역발상':'인기마를 피한다. 남들이 놓친 말에서 값을 찾으려 한다'
+};
+/* 같은 성향이라도 개체마다 다르도록 생성 시점에 편차를 부여 */
+function makeTraits(pk){
+  const b=PERSONA[pk],j=(v,d)=>Math.round((v*(1-d+Math.random()*d*2))*100)/100;
+  return {tau:j(b.tau,0.25),skew:j(b.skew,0.2),stake:Math.min(0.98,j(b.stake,0.25)),
+    horses:Math.max(1,Math.min(3,b.horses+(Math.random()<0.25?(Math.random()<0.5?-1:1):0))),
+    buy:Math.min(0.98,j(b.buy,0.35)),value:b.value,herd:b.herd,late:j(b.late,0.2)};
+}
+function traitsOf(id){const p=players[id];return (p&&p.traits)||PERSONA[(p&&p.persona)]||PERSONA['분석형'];}
 let botsActive=true;
 db.ref(`${ROOT}/config/botsActive`).on('value',s=>{
   botsActive=s.val()!==false;
@@ -688,6 +705,22 @@ function renderBotMsg(){
   const byP={};ids.forEach(id=>{const p=players[id].persona||'?';byP[p]=(byP[p]||0)+1;});
   el.innerHTML=`현재 봇 ${ids.length}명 · 참여 ${botsActive?'<b style="color:var(--up)">ON</b>':'<b style="color:var(--down)">OFF</b>'}`
     +(ids.length?` <span style="color:var(--muted)">(${Object.keys(byP).map(k=>k+' '+byP[k]).join(' · ')})</span>`:'');
+  const box=$('botRoster');if(!box)return;
+  if(!ids.length){box.innerHTML='';return;}
+  const r=state?state.round:0;
+  box.innerHTML=ids.sort((a,b)=>players[b].money-players[a].money).map(id=>{
+    const p=players[id],tr=traitsOf(id);
+    const bet=bets[r]&&bets[r][id];
+    const betTxt=bet?Object.keys(bet.stakes||{}).map(h=>`${disp(h)} ${bet.stakes[h]}`).join(' · '):
+      (state&&state.phase==='open'?'<span style="color:var(--muted)">베팅 대기</span>':'—');
+    const conc=tr.tau<=2.6?'집중':tr.tau>=4.2?'분산':'보통';
+    return `<div style="border:1px solid var(--line);border-radius:8px;padding:7px 10px;margin-bottom:6px">
+      <div><b>🤖 ${p.name}</b> <span style="color:var(--amber)">${p.persona||''}</span>
+        <span style="float:right;font-family:'Chakra Petch',monospace;color:var(--amber)">${fmt(p.money)}만</span></div>
+      <div style="color:var(--muted);font-size:11.5px;margin-top:2px">${PDESC[p.persona]||''}</div>
+      <div style="color:var(--muted);font-size:11.5px">정보구매 ${Math.round(tr.buy*100)}% · 베팅강도 ${Math.round(tr.stake*100)}% · ${conc}형 ${tr.horses}마리 · ${(tr.late||0.5)>=0.75?'막판 베팅':'조기 베팅'}</div>
+      <div style="font-size:12px;margin-top:3px">R${r} ${betTxt}</div>
+    </div>`;}).join('');
 }
 async function toggleBots(){
   try{await db.ref(`${ROOT}/config/botsActive`).set(!botsActive);}catch(e){dbError(e);return;}
@@ -703,8 +736,8 @@ async function addBots(){
     if(used.has(nm))continue;
     used.add(nm);
     const persona=PK[Math.floor(Math.random()*PK.length)];
-    ups['bot_'+Date.now().toString(36)+'_'+made]={name:nm,money:state&&state.round?100:100,
-      welfareUsed:false,bot:true,persona,joinedAt:Date.now()};
+    ups['bot_'+Date.now().toString(36)+'_'+made]={name:nm,money:100,
+      welfareUsed:false,bot:true,persona,traits:makeTraits(persona),joinedAt:Date.now()};
     made++;
   }
   try{await db.ref(`${ROOT}/players`).update(ups);}catch(e){dbError(e);return;}
@@ -724,7 +757,7 @@ async function removeBots(){
 }
 /* ── 봇 판단: 공개 소식 + 매체 신뢰도만 사용 (진위 접근 없음) ── */
 function botEstimate(uid,extraIdx){
-  const p=players[uid],pr=PERSONA[p.persona]||PERSONA['분석형'];
+  const p=players[uid],pr=traitsOf(uid);
   const r=state.round,field=Object.values(state.field);
   const deck=Object.values(state.deck||{}),tg=state.cardTg||{};
   const est={};
@@ -743,7 +776,7 @@ async function botBet(uid){
   if(!state||state.phase!=='open'||!botsActive)return;
   const r=state.round,p=players[uid];
   if(!p||!p.bot||(bets[r]&&bets[r][uid]))return;
-  const pr=PERSONA[p.persona]||PERSONA['분석형'];
+  const pr=traitsOf(uid);
   const field=Object.values(state.field);
   let money=p.money;
   // 1) 히든 정보 구매 (성향별 확률) — 내용은 보되 진위는 모름
@@ -801,8 +834,8 @@ function botTick(){
     const now=Date.now(),dl=state.deadline||now+180000;
     const span=Math.max(20000,dl-now-8000);
     botIds().forEach(id=>{
-      const pr=PERSONA[players[id].persona]||PERSONA['분석형'];
-      const lo=0.15+pr.late*0.4;
+      const pr=traitsOf(id);
+      const lo=0.15+(pr.late||0.5)*0.4;
       botPlan[id]=now+span*(lo+Math.random()*(0.95-lo));
     });
   }
