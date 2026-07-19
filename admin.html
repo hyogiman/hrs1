@@ -107,7 +107,7 @@ td.num{font-family:'Chakra Petch',monospace;color:var(--amber);text-align:right}
     <div>라운드 <select id="cRound" onchange="renderCustomList()"></select>
       · 대상 <select id="cTarget"></select>
       · 매체 <select id="cMedia"></select></div>
-    <div style="margin-top:7px">구분 <select id="cPub"><option value="1">전체 공개</option><option value="0">🛒 상점 판매</option></select>
+    <div style="margin-top:7px">구분 <select id="cPub"><option value="0" selected>🛒 상점 판매 (기본)</option><option value="1">📢 마사회 특별 공지 (전원 무료 공개)</option></select>
       · 진위 <select id="cTruth"><option value="1">사실</option><option value="0">거짓</option></select>
       · 지속 <select id="cPerm"><option value="0">당일만</option><option value="1">시즌 지속(영구)</option></select></div>
     <div style="margin-top:7px">효과 <select id="cStat"></select>
@@ -115,7 +115,10 @@ td.num{font-family:'Chakra Petch',monospace;color:var(--amber);text-align:right}
     <div style="margin-top:7px">내용 <span class="small">— {말} 을 쓰면 대상 이름으로 치환</span><br>
       <textarea id="cText" rows="2" style="width:100%;background:var(--board);color:var(--chalk);border:1px solid var(--line);border-radius:6px;padding:7px;font-family:inherit;font-size:13px" placeholder="예: {말}, 어제 야간 훈련에서 이상 징후 포착"></textarea></div>
     <button onclick="addCustom()" style="margin-top:8px">정보 추가</button>
-    <div class="small" style="margin-top:6px">해당 라운드가 <b>시작될 때</b> 기존 7건에 더해 발행됩니다. 이미 진행 중인 라운드에 추가하려면 다음 라운드를 지정하세요.</div>
+    <div class="small" style="margin-top:6px">
+      · 작성한 정보의 <b style="color:var(--amber)">대상 말은 그 라운드 출전이 자동 확정</b>됩니다 (최대 5마리).<br>
+      · 라운드 정보 총량은 10건으로 고정되므로, 커스텀 1건마다 같은 말의 내장 정보 1건이 밀려납니다.<br>
+      · 해당 라운드가 <b>시작될 때</b> 발행됩니다. 진행 중인 라운드에 넣으려면 다음 라운드를 지정하세요.</div>
     <div id="customList" style="margin-top:10px"></div>
   </div>
 </div>
@@ -152,6 +155,18 @@ td.num{font-family:'Chakra Petch',monospace;color:var(--amber);text-align:right}
   <div class="card"><h2>시드 고정 (테스트용)</h2>
     <input id="seedInput" placeholder="비우면 랜덤" style="width:160px">
     <div class="small" style="margin-top:6px">값을 넣고 시즌을 시작하면 진위·출전 시퀀스가 동일하게 재현됩니다.</div>
+  </div>
+  <div class="card"><h2>스페셜 라운드 <span class="small" style="color:var(--muted)">상금 외부 지급 — 자금 조달 장치</span></h2>
+    <div>라운드 <select id="spRound"></select>
+      · 대상 등수 <select id="spRank"><option value="1">1위</option><option value="2" selected>2위</option><option value="3">3위</option><option value="4">4위</option><option value="5">5위</option></select>
+      · 배수 <select id="spMult"><option>2</option><option>3</option><option selected>4</option><option>5</option><option>6</option></select>배</div>
+    <button onclick="addSpecial()" style="margin-top:8px">지정</button>
+    <button onclick="presetSpecial()">권장 프리셋 (R3·R6·R9 · 2위 · 4배)</button>
+    <div class="small" style="margin-top:6px">지정 등수를 한 말에 베팅했다면 <b>베팅액 × 배수</b>를 추가로 받습니다(배당과 별도). 참가자에게는 라운드 시작 시 공지됩니다.</div>
+    <div id="spList" style="margin-top:8px"></div>
+  </div>
+  <div class="card"><h2>상점 판매 현황</h2>
+    <div id="shopBoard" class="small">집계 대기</div>
   </div>
   <div class="card"><h2>진위 미리보기</h2>
     <button onclick="togglePeek()" id="btnPeek">열기 (기본 봉인)</button>
@@ -204,134 +219,152 @@ function dbError(e){
 
 /* ════════ 게임 데이터 (index/screen과 동일 유지) ════════ */
 const HORSES={'질풍':{s:[42,48,12,19,29]},'만리':{s:[31,14,49,28,28]},'중용':{s:[38,32,30,23,27]},
- '우직':{s:[29,21,32,47,21]},'적토':{s:[49,43,29,17,12]},'섬광':{s:[41,39,22,13,35]},'현무':{s:[30,23,41,20,36]}};
+ '우직':{s:[29,21,32,47,21]},'적토':{s:[45,39,27,22,17]},'섬광':{s:[40,38,22,17,33]},'현무':{s:[32,24,43,20,31]}};
 const STATN=['스피드','스타트','뒷심','적응력','기수'];
-const SCHEDULE=[['중',0],['단',0],['장',0],['중',1],['단',0],['장',1],['중',0],['단',1],['중',0],['장',0]];
+/* 라운드 편성: 거리 + 환경 4요소 (고정 편성 — 카드 서사와 환경을 일치시키기 위함) */
+const SCHEDULE=[
+ {d:'중',going:'양호',wind:'무풍',temp:'온화',name:'개막전'},
+ {d:'단',going:'양호',wind:'순풍',temp:'온화',name:'스프린트'},
+ {d:'장',going:'다습',wind:'무풍',temp:'혹서',name:'장거리 인내전'},
+ {d:'중',going:'불량',wind:'역풍',temp:'온화',name:'진창 혈투'},
+ {d:'단',going:'양호',wind:'무풍',temp:'혹한',name:'한파 스프린트'},
+ {d:'장',going:'다습',wind:'역풍',temp:'온화',name:'역풍 마라톤'},
+ {d:'중',going:'양호',wind:'순풍',temp:'혹서',name:'폭염 하이페이스'},
+ {d:'단',going:'불량',wind:'역풍',temp:'혹한',name:'최악의 날'},
+ {d:'중',going:'다습',wind:'무풍',temp:'온화',name:'준결승'},
+ {d:'장',going:'불량',wind:'순풍',temp:'혹서',name:'파이널'}];
 const DISTW={'단':[.35,.50,.15],'중':[.40,.30,.30],'장':[.35,.15,.50]};
+const GOINGC={'양호':0.10,'다습':0.33,'불량':0.55};   // 주로 → 적응력 반영 계수
+const ENVC={wS:0.22,wF:0.34,tJ:0.42,tS:0.16,gate:1.3,gateS:1.1};
+const BASE_SCALE=44;
 const CUSTOM_BASE=100;  // 커스텀 카드 인덱스 시작
-const INFO_CAP=18;      // 라운드당 정보 효과 상한(±점)
+const INFO_CAP=24;      // 라운드당 정보 효과 상한(±점)
 const PERM_CAP=30;      // 시즌 누적 영구 스탯 변동 상한(±)
+const START_MONEY=300;  // 시작 자금(만원)
+const PRICES={info:10,verify:20};   // 정보권 / 진위 판별권
+const BUY_BASE=3;       // 라운드당 기본 구매 횟수
+const BUY_MAX=6;        // 이월 포함 최대 보유 횟수
 const MEDIA={'공시':{rel:1},'경마일보':{rel:.85},'김패독':{rel:.7},'터프':{rel:.5},'마방수첩':{rel:.5},'광장':{rel:.3},'찌라시':{rel:.3}};
 const CARDS=[
 [
- {m:'공시',pub:1,t:'',auto:1,noeff:1},
- {m:'경마일보',pub:1,t:'{말}, 동계 훈련 기록 자체 최고치 경신 확인. 조련사 "완성됐다"',stat:'컨디션',d:6},
- {m:'김패독',pub:1,t:'"{말} 이 친구, 새벽에 보니 걸음이 묵직해요. 제 감으로는 오늘 사고 한번 칩니다"',stat:'컨디션',d:10},
- {m:'찌라시',pub:1,t:'[퍼옴] {말} 마방 어젯밤 수의사 차량 목격. 겉으론 멀쩡. 아는 사람은 뺐다 함',stat:'컨디션',d:-20},
- {m:'마방수첩',pub:0,t:'옆 마방({말}) 분위기 요즘 뒤숭숭하던데… 🤫',stat:'컨디션',d:-14},
- {m:'광장',pub:0,t:'{말} 오늘 발주 연습 개빠르던데?? 직관러 3명 동의',stat:'스타트',d:29},
- {m:'터프',pub:0,t:'[단독] {말}, 극비 발굽 시술설!!',stat:'스피드',d:19,perm:1},
- {m:'경마일보',pub:1,t:'{말}, 개막전 체중 측정 결과 최적 범위 — 관리 상태 우수 판정',stat:'컨디션',d:6},
- {m:'터프',pub:1,t:'[개막특집] {말} 겨우내 환골탈태!! 스피드가 몰라보게 늘었다는 제보',stat:'스피드',d:14,perm:1},
- {m:'광장',pub:0,t:'{말} 새벽 운동장에서 막판 스퍼트 연습만 계속 하던데. 작전 있는 듯',stat:'뒷심',d:29,perm:1}
+ {m:'경마일보',pub:0,t:'{말} 조교사 인터뷰: \"개막전이라 무리 안 시킵니다. 8할만 쓸 겁니다\"',stat:'컨디션',d:-8},
+ {m:'경마일보',pub:0,t:'{말}, 동계 훈련 기록 자체 최고치 경신 확인. 조련사 "완성됐다"',stat:'컨디션',d:4},
+ {m:'김패독',pub:0,t:'"{말} 이 친구, 새벽에 보니 걸음이 묵직해요. 제 감으로는 오늘 사고 한번 칩니다"',stat:'컨디션',d:7},
+ {m:'찌라시',pub:0,t:'[퍼옴] {말} 마방 어젯밤 수의사 차량 목격. 겉으론 멀쩡. 아는 사람은 뺐다 함',stat:'컨디션',d:-14},
+ {m:'마방수첩',pub:0,t:'옆 마방({말}) 분위기 요즘 뒤숭숭하던데… 🤫',stat:'컨디션',d:-10},
+ {m:'광장',pub:0,t:'{말} 오늘 발주 연습 개빠르던데?? 직관러 3명 동의',stat:'스타트',d:26},
+ {m:'터프',pub:0,t:'[단독] {말}, 극비 발굽 시술설!!',stat:'스피드',d:17,perm:1},
+ {m:'경마일보',pub:0,t:'{말}, 개막전 체중 측정 결과 최적 범위 — 관리 상태 우수 판정',stat:'컨디션',d:4},
+ {m:'터프',pub:0,t:'[개막특집] {말} 겨우내 환골탈태!! 스피드가 몰라보게 늘었다는 제보',stat:'스피드',d:13,perm:1},
+ {m:'광장',pub:0,t:'{말} 새벽 운동장에서 막판 스퍼트 연습만 계속 하던데. 작전 있는 듯',stat:'뒷심',d:26,perm:1}
 ],
 [
- {m:'공시',pub:1,t:'',auto:1,noeff:1},
- {m:'경마일보',pub:1,t:'{말}, 발주 반응속도 측정 결과 리그 최상위권 확인',stat:'스타트',d:12},
- {m:'김패독',pub:1,t:'"{말} 어깨 근육이 아주 단단해요. 몸이 말해줍니다"',stat:'스피드',d:19},
- {m:'터프',pub:1,t:'[단독] {말} 마방, 비밀 병기 조련설!!',stat:'컨디션',d:14},
- {m:'마방수첩',pub:0,t:'옆칸 {말} 오늘 아침 사료를 남기던데 🤔',stat:'컨디션',d:-14},
- {m:'광장',pub:0,t:'{말} 새벽 게이트 연습 폭발적이던데? 본 사람 더 없음?',stat:'스타트',d:29},
- {m:'찌라시',pub:0,t:'{말} 기수 야간 음주 목격담. 사진 있다는데 아직 못 구함.',stat:'컨디션',d:-20},
- {m:'경마일보',pub:1,t:'{말}, 단거리 전용 훈련 프로그램 이수 완료 — 코치진 "준비 끝"',stat:'스타트',d:12,perm:1},
- {m:'김패독',pub:1,t:'"{말} 반응이 반 박자 늦어요. 게이트에서 손해 볼 겁니다"',stat:'스타트',d:-19},
- {m:'마방수첩',pub:0,t:'{말} 담당 조련사가 요즘 야간 특훈을 시키더라. 몸이 달라지는 중',stat:'스피드',d:14,perm:1}
+ {m:'김패독',pub:0,t:'\"{말} 발주 연습 보니까 오늘 순풍 타면 그냥 날아갑니다\"',stat:'스피드',d:18},
+ {m:'경마일보',pub:0,t:'{말}, 발주 반응속도 측정 결과 리그 최상위권 확인',stat:'스타트',d:11},
+ {m:'김패독',pub:0,t:'"{말} 어깨 근육이 아주 단단해요. 몸이 말해줍니다"',stat:'스피드',d:17},
+ {m:'터프',pub:0,t:'[단독] {말} 마방, 비밀 병기 조련설!!',stat:'컨디션',d:10},
+ {m:'마방수첩',pub:0,t:'옆칸 {말} 오늘 아침 사료를 남기던데 🤔',stat:'컨디션',d:-10},
+ {m:'광장',pub:0,t:'{말} 새벽 게이트 연습 폭발적이던데? 본 사람 더 없음?',stat:'스타트',d:26},
+ {m:'찌라시',pub:0,t:'{말} 기수 야간 음주 목격담. 사진 있다는데 아직 못 구함.',stat:'컨디션',d:-14},
+ {m:'경마일보',pub:0,t:'{말}, 단거리 전용 훈련 프로그램 이수 완료 — 코치진 "준비 끝"',stat:'스타트',d:11,perm:1},
+ {m:'김패독',pub:0,t:'"{말} 반응이 반 박자 늦어요. 게이트에서 손해 볼 겁니다"',stat:'스타트',d:-17},
+ {m:'마방수첩',pub:0,t:'{말} 담당 조련사가 요즘 야간 특훈을 시키더라. 몸이 달라지는 중',stat:'스피드',d:13,perm:1}
 ],
 [
- {m:'공시',pub:1,t:'',auto:1,noeff:1},
- {m:'공시',pub:1,t:'기상 전망: 명일 강수 가능성 높음. 주로 상태 변동 유의.',noeff:1},
- {m:'김패독',pub:1,t:'"{말}는 오늘 같은 조건에서 다른 말이 됩니다. 오늘이 그 무대예요"',stat:'컨디션',d:10},
- {m:'터프',pub:1,t:'{말} 한계설 — 전문가 익명 인터뷰 입수!!',stat:'뒷심',d:-19,perm:1},
- {m:'광장',pub:0,t:'{말} 요즘 지구력 훈련 성과 미쳤다는 소문. 산책러 증언 다수',stat:'뒷심',d:19,perm:1},
- {m:'찌라시',pub:0,t:'{말} 마방 관계자들 대규모 베팅 정황. 뭘 아는 거다.',stat:'컨디션',d:20},
- {m:'마방수첩',pub:0,t:'옆칸 {말} 요즘 밤에 잠을 설치던데…',stat:'컨디션',d:-14},
- {m:'경마일보',pub:1,t:'{말}, 심폐 지구력 측정치 전기 대비 상승 — 장거리 적합 판정',stat:'뒷심',d:12,perm:1},
- {m:'김패독',pub:1,t:'"{말}는 막판에 무너지는 버릇이 있어요. 오늘 거리는 부담입니다"',stat:'뒷심',d:-19},
- {m:'찌라시',pub:0,t:'{말} 마방, 신형 회복 장비 밀반입설. 지구력이 딴 말이 됐다 함.',stat:'뒷심',d:17,perm:1}
+ {m:'터프',pub:0,t:'[단독] {말} 기수, 폭염 대비 수분 관리 프로그램 완주',stat:'기수',d:20},
+ {m:'마방수첩',pub:0,t:'{말} 어제 야간 훈련 중 다리 절뚝이는 거 봤다는데…',stat:'컨디션',d:-12},
+ {m:'김패독',pub:0,t:'"{말}는 오늘 같은 조건에서 다른 말이 됩니다. 오늘이 그 무대예요"',stat:'컨디션',d:7},
+ {m:'터프',pub:0,t:'{말} 한계설 — 전문가 익명 인터뷰 입수!!',stat:'뒷심',d:-17,perm:1},
+ {m:'광장',pub:0,t:'{말} 요즘 지구력 훈련 성과 미쳤다는 소문. 산책러 증언 다수',stat:'뒷심',d:17,perm:1},
+ {m:'찌라시',pub:0,t:'{말} 마방 관계자들 대규모 베팅 정황. 뭘 아는 거다.',stat:'컨디션',d:14},
+ {m:'마방수첩',pub:0,t:'옆칸 {말} 요즘 밤에 잠을 설치던데…',stat:'컨디션',d:-10},
+ {m:'경마일보',pub:0,t:'{말}, 심폐 지구력 측정치 전기 대비 상승 — 장거리 적합 판정',stat:'뒷심',d:11,perm:1},
+ {m:'김패독',pub:0,t:'"{말}는 막판에 무너지는 버릇이 있어요. 오늘 거리는 부담입니다"',stat:'뒷심',d:-17},
+ {m:'찌라시',pub:0,t:'{말} 마방, 신형 회복 장비 밀반입설. 지구력이 딴 말이 됐다 함.',stat:'뒷심',d:15,perm:1}
 ],
 [
- {m:'공시',pub:1,t:'',auto:1,noeff:1},
- {m:'경마일보',pub:1,t:'{말}, 신형 발주 훈련 도입 — 측정 데이터로 성과 확인',stat:'스타트',d:12,perm:1},
- {m:'김패독',pub:1,t:'"비 오면 {말}이죠. 진창은 이 친구 안방입니다"',stat:'적응력',d:28},
- {m:'터프',pub:1,t:'{말} 우천 공포증설!! 과거 빗길 낙마 트라우마 재조명',stat:'적응력',d:-28},
- {m:'마방수첩',pub:0,t:'{말} 마방, 오늘 아침 새 편자 급히 주문했다더라',stat:'적응력',d:28},
- {m:'광장',pub:0,t:'{말} 진창 훈련에서 개고생하던데 ㅋㅋ 오늘 힘들 듯',stat:'적응력',d:-42},
- {m:'찌라시',pub:0,t:'{말} 기수, 과거 우천 경주 관련 좋지 않은 이력 있다는 제보',stat:'적응력',d:-42},
- {m:'경마일보',pub:1,t:'{말}, 우천 대비 특수 편자 장착 확인 — 마장 관계자 발표',stat:'적응력',d:18},
- {m:'터프',pub:1,t:'[속보] {말} 빗길 전담 훈련사 영입!! 진흙탕의 왕 예약',stat:'적응력',d:21,perm:1},
- {m:'광장',pub:0,t:'{말} 비 오는 날마다 마방에서 안 나온다던데. 물 싫어하는 게 분명함 ㅋㅋ',stat:'적응력',d:-42}
+ {m:'광장',pub:0,t:'{말} 진창 훈련장에서 혼자 신나 있었다는 목격담 ㅋㅋ',stat:'적응력',d:16},
+ {m:'경마일보',pub:0,t:'{말}, 신형 발주 훈련 도입 — 측정 데이터로 성과 확인',stat:'스타트',d:11,perm:1},
+ {m:'김패독',pub:0,t:'"비 오면 {말}이죠. 진창은 이 친구 안방입니다"',stat:'적응력',d:14},
+ {m:'터프',pub:0,t:'{말} 우천 공포증설!! 과거 빗길 낙마 트라우마 재조명',stat:'적응력',d:-14},
+ {m:'마방수첩',pub:0,t:'{말} 마방, 오늘 아침 새 편자 급히 주문했다더라',stat:'적응력',d:14},
+ {m:'광장',pub:0,t:'{말} 진창 훈련에서 개고생하던데 ㅋㅋ 오늘 힘들 듯',stat:'적응력',d:-21},
+ {m:'찌라시',pub:0,t:'{말} 기수, 과거 우천 경주 관련 좋지 않은 이력 있다는 제보',stat:'적응력',d:-21},
+ {m:'경마일보',pub:0,t:'{말}, 우천 대비 특수 편자 장착 확인 — 마장 관계자 발표',stat:'적응력',d:9},
+ {m:'터프',pub:0,t:'[속보] {말} 빗길 전담 훈련사 영입!! 진흙탕의 왕 예약',stat:'적응력',d:10,perm:1},
+ {m:'광장',pub:0,t:'{말} 비 오는 날마다 마방에서 안 나온다던데. 물 싫어하는 게 분명함 ㅋㅋ',stat:'적응력',d:-21}
 ],
 [
- {m:'공시',pub:1,t:'',auto:1,noeff:1},
- {m:'공시',pub:1,t:'전 출전마 대상 정기 정밀검진 예정 공고 (결과는 추후 공시)',noeff:1},
- {m:'김패독',pub:1,t:'"{말}이… 걸음이 이상해요. 30년 본 제 눈은 못 속입니다"',stat:'컨디션',d:-10},
- {m:'터프',pub:1,t:'{말} 스피드 재측정 — 역대급 수치 나왔다!!',stat:'스피드',d:19,perm:1},
- {m:'광장',pub:0,t:'{말} 오늘은 답없다 vs 다르다, 광장 논쟁 中 (부정 우세)',stat:'컨디션',d:-20},
- {m:'찌라시',pub:0,t:'{말} 마방 매각설. 내부 어수선하다 함.',stat:'컨디션',d:-20},
- {m:'마방수첩',pub:0,t:'{말} 칸에 오늘 수의사가 두 번 다녀감',stat:'컨디션',d:-14},
- {m:'경마일보',pub:1,t:'{말}, 전반기 발주 성공률 리그 1위 — 데이터로 확인',stat:'스타트',d:12},
- {m:'터프',pub:1,t:'[중간결산] {말} 전반기 혹사 후유증!! 회복 프로그램 중단설',stat:'기수',d:-15,perm:1},
- {m:'마방수첩',pub:0,t:'{말} 요즘 출발 연습만 죽어라 하더라. 뭔가 준비하는 눈치',stat:'스타트',d:19,perm:1}
+ {m:'경마일보',pub:0,t:'{말}, 동계 저온 적응 훈련 이수 확인. 근육 경직도 측정치 양호',stat:'스타트',d:16,perm:1},
+ {m:'찌라시',pub:0,t:'[퍼옴] {말} 마방 난방 고장났다더라. 밤새 떨었을 듯',stat:'컨디션',d:-14},
+ {m:'김패독',pub:0,t:'"{말}이… 걸음이 이상해요. 30년 본 제 눈은 못 속입니다"',stat:'컨디션',d:-7},
+ {m:'터프',pub:0,t:'{말} 스피드 재측정 — 역대급 수치 나왔다!!',stat:'스피드',d:17,perm:1},
+ {m:'광장',pub:0,t:'{말} 오늘은 답없다 vs 다르다, 광장 논쟁 中 (부정 우세)',stat:'컨디션',d:-14},
+ {m:'찌라시',pub:0,t:'{말} 마방 매각설. 내부 어수선하다 함.',stat:'컨디션',d:-14},
+ {m:'마방수첩',pub:0,t:'{말} 칸에 오늘 수의사가 두 번 다녀감',stat:'컨디션',d:-10},
+ {m:'경마일보',pub:0,t:'{말}, 전반기 발주 성공률 리그 1위 — 데이터로 확인',stat:'스타트',d:11},
+ {m:'터프',pub:0,t:'[중간결산] {말} 전반기 혹사 후유증!! 회복 프로그램 중단설',stat:'기수',d:-20,perm:1},
+ {m:'마방수첩',pub:0,t:'{말} 요즘 출발 연습만 죽어라 하더라. 뭔가 준비하는 눈치',stat:'스타트',d:17,perm:1}
 ],
 [
- {m:'공시',pub:1,t:'',auto:1,noeff:1},
- {m:'공시',pub:1,t:'금일 주로 정밀 점검 완료 공시. 안전 이상 없음.',noeff:1},
- {m:'경마일보',pub:1,t:'{말}, 최근 훈련 데이터 상승세 뚜렷 — 수치로 확인',stat:'컨디션',d:6},
- {m:'김패독',pub:1,t:'"{말}, 오늘 조건은 통계적으로 불리합니다. 제 답은 정해져 있어요"',stat:'컨디션',d:-10},
- {m:'광장',pub:0,t:'{말} 훈련 영상 방금 떴는데 이거 우승각 아니냐?? 링크 참조',stat:'컨디션',d:20},
- {m:'터프',pub:0,t:'{말}, 대관식 예고!! 오늘은 하늘의 계시',stat:'컨디션',d:14},
- {m:'찌라시',pub:0,t:'{말}, 조용히 컨디션 회복 완료. 아는 사람들 다시 담는 중.',stat:'컨디션',d:20},
- {m:'경마일보',pub:1,t:'{말}, 악천후 경주 통산 성적 상위권 — 기록이 증명',stat:'적응력',d:18},
- {m:'김패독',pub:1,t:'"진창 장거리는 결국 체력전이에요. {말} 심장이면 끝까지 갑니다"',stat:'뒷심',d:19},
- {m:'광장',pub:0,t:'{말} 어제 폭우 속에서 자율 훈련 하던데. 미쳤나 했는데 잘만 뛰더라',stat:'적응력',d:25,perm:1}
+ {m:'김패독',pub:0,t:'\"{말}은 역풍이 오히려 반갑죠. 뒤에서 바람 피하다 마지막에 나오면 됩니다\"',stat:'뒷심',d:20},
+ {m:'터프',pub:0,t:'[속보] {말} 스태미나 훈련량 대폭 축소설',stat:'뒷심',d:-18},
+ {m:'경마일보',pub:0,t:'{말}, 최근 훈련 데이터 상승세 뚜렷 — 수치로 확인',stat:'컨디션',d:4},
+ {m:'김패독',pub:0,t:'"{말}, 오늘 조건은 통계적으로 불리합니다. 제 답은 정해져 있어요"',stat:'컨디션',d:-7},
+ {m:'광장',pub:0,t:'{말} 훈련 영상 방금 떴는데 이거 우승각 아니냐?? 링크 참조',stat:'컨디션',d:14},
+ {m:'터프',pub:0,t:'{말}, 대관식 예고!! 오늘은 하늘의 계시',stat:'컨디션',d:10},
+ {m:'찌라시',pub:0,t:'{말}, 조용히 컨디션 회복 완료. 아는 사람들 다시 담는 중.',stat:'컨디션',d:14},
+ {m:'경마일보',pub:0,t:'{말}, 악천후 경주 통산 성적 상위권 — 기록이 증명',stat:'적응력',d:9},
+ {m:'김패독',pub:0,t:'"진창 장거리는 결국 체력전이에요. {말} 심장이면 끝까지 갑니다"',stat:'뒷심',d:17},
+ {m:'광장',pub:0,t:'{말} 어제 폭우 속에서 자율 훈련 하던데. 미쳤나 했는데 잘만 뛰더라',stat:'적응력',d:12,perm:1}
 ],
 [
- {m:'공시',pub:1,t:'',auto:1,noeff:1},
- {m:'경마일보',pub:1,t:'{말} 훈련 데이터 전 항목 시즌 최고치',stat:'컨디션',d:6},
- {m:'김패독',pub:1,t:'"{말}의 시간이 옵니다. 이 조건에선 이 친구가 교과서예요"',stat:'컨디션',d:10},
- {m:'터프',pub:1,t:'{말} 노쇠설 — 최근 회복 속도 급감 포착!!',stat:'뒷심',d:-14,perm:1},
- {m:'광장',pub:0,t:'{말} 어제 조교 타임 실화냐? 지금까지는 몸풀기였네',stat:'스피드',d:29,perm:1},
- {m:'찌라시',pub:0,t:'{말} 마방 관련 모종의 담합설. 이번 주 냄새가 남.',stat:'컨디션',d:-20},
- {m:'마방수첩',pub:0,t:'우리 구역에서 제일 조용한 애({말})가 제일 무섭지',stat:'컨디션',d:14},
- {m:'경마일보',pub:1,t:'{말}, 후반기 첫 경주 앞두고 컨디션 점검 통과 — 이상 없음',stat:'컨디션',d:6},
- {m:'터프',pub:1,t:'[단독] {말} 순간가속 재개발 프로젝트!! 후반기 대변신 예고',stat:'스피드',d:14,perm:1},
- {m:'찌라시',pub:0,t:'{말} 사료 공급처 바뀐 뒤로 뒷심이 예전 같지 않다는 소문. 계약 분쟁이라 함.',stat:'뒷심',d:-17,perm:1}
+ {m:'마방수첩',pub:0,t:'{말} 기수분 요즘 컨디션이 영 아니던데… 더위 많이 타시는 듯',stat:'기수',d:-18},
+ {m:'경마일보',pub:0,t:'{말} 훈련 데이터 전 항목 시즌 최고치',stat:'컨디션',d:4},
+ {m:'김패독',pub:0,t:'"{말}의 시간이 옵니다. 이 조건에선 이 친구가 교과서예요"',stat:'컨디션',d:7},
+ {m:'터프',pub:0,t:'{말} 노쇠설 — 최근 회복 속도 급감 포착!!',stat:'뒷심',d:-13,perm:1},
+ {m:'광장',pub:0,t:'{말} 어제 조교 타임 실화냐? 지금까지는 몸풀기였네',stat:'스피드',d:26,perm:1},
+ {m:'찌라시',pub:0,t:'{말} 마방 관련 모종의 담합설. 이번 주 냄새가 남.',stat:'컨디션',d:-14},
+ {m:'마방수첩',pub:0,t:'우리 구역에서 제일 조용한 애({말})가 제일 무섭지',stat:'컨디션',d:10},
+ {m:'경마일보',pub:0,t:'{말}, 후반기 첫 경주 앞두고 컨디션 점검 통과 — 이상 없음',stat:'컨디션',d:4},
+ {m:'터프',pub:0,t:'[단독] {말} 순간가속 재개발 프로젝트!! 후반기 대변신 예고',stat:'스피드',d:13,perm:1},
+ {m:'찌라시',pub:0,t:'{말} 사료 공급처 바뀐 뒤로 뒷심이 예전 같지 않다는 소문. 계약 분쟁이라 함.',stat:'뒷심',d:-15,perm:1}
 ],
 [
- {m:'공시',pub:1,t:'',auto:1,noeff:1},
- {m:'공시',pub:1,t:'금일 돌발 기상에 따른 안전 점검 완료 공시',noeff:1},
- {m:'김패독',pub:1,t:'"돌발 변수엔 결국 노련한 기수죠. {말} 쪽 기수가 이런 날 강합니다"',stat:'적응력',d:28},
- {m:'터프',pub:1,t:'{말} 재앙의 날, 오늘 재현되나!!',stat:'적응력',d:-28},
- {m:'마방수첩',pub:0,t:'{말}이 요즘 새벽마다 몰래 빗길 적응 훈련 하던데',stat:'적응력',d:21,perm:1},
- {m:'광장',pub:0,t:'{말} 오늘 아침 발굽 상태 별로라던데. 직관러 증언.',stat:'컨디션',d:-20},
- {m:'찌라시',pub:0,t:'{말} 최근 성적 만들기 조작설',stat:'컨디션',d:-20},
- {m:'경마일보',pub:1,t:'{말}, 돌발 기상 대응 훈련 이수 확인 — 침착성 검증',stat:'적응력',d:18,perm:1},
- {m:'김패독',pub:1,t:'"이런 날은 몸이 가벼운 말이 유리해요. {말}가 그렇습니다"',stat:'컨디션',d:10},
- {m:'마방수첩',pub:0,t:'{말} 빗소리만 나면 발을 구르더라. 불안한 건지 신난 건지',stat:'적응력',d:-28}
+ {m:'광장',pub:0,t:'{말} 오늘 같은 날씨엔 그냥 포기하는 게 낫다 vs 아니다 갑론을박',stat:'적응력',d:-14},
+ {m:'경마일보',pub:0,t:'{말}, 악조건 대응 매뉴얼 재정비 완료. 마방 측 \"준비됐다\"',stat:'컨디션',d:10},
+ {m:'김패독',pub:0,t:'"돌발 변수엔 결국 노련한 기수죠. {말} 쪽 기수가 이런 날 강합니다"',stat:'적응력',d:14},
+ {m:'터프',pub:0,t:'{말} 재앙의 날, 오늘 재현되나!!',stat:'적응력',d:-14},
+ {m:'마방수첩',pub:0,t:'{말}이 요즘 새벽마다 몰래 빗길 적응 훈련 하던데',stat:'적응력',d:10,perm:1},
+ {m:'광장',pub:0,t:'{말} 오늘 아침 발굽 상태 별로라던데. 직관러 증언.',stat:'컨디션',d:-14},
+ {m:'찌라시',pub:0,t:'{말} 최근 성적 만들기 조작설',stat:'컨디션',d:-14},
+ {m:'경마일보',pub:0,t:'{말}, 돌발 기상 대응 훈련 이수 확인 — 침착성 검증',stat:'적응력',d:9,perm:1},
+ {m:'김패독',pub:0,t:'"이런 날은 몸이 가벼운 말이 유리해요. {말}가 그렇습니다"',stat:'컨디션',d:7},
+ {m:'마방수첩',pub:0,t:'{말} 빗소리만 나면 발을 구르더라. 불안한 건지 신난 건지',stat:'적응력',d:-14}
 ],
 [
- {m:'공시',pub:1,t:'',auto:1,noeff:1},
- {m:'경마일보',pub:1,t:'{말}, 후반기 최다 상위권 진입 — 꾸준함으로 입증',stat:'컨디션',d:6},
- {m:'김패독',pub:1,t:'"지금 폼으로 {말}을 이길 말은 없어요. 단언합니다"',stat:'컨디션',d:10},
- {m:'터프',pub:1,t:'{말} 혹사 논란 — 피로 누적 심각설!!',stat:'컨디션',d:-14},
- {m:'마방수첩',pub:0,t:'요즘 새벽마다 울음소리가 들림… {말} 칸 쪽에서',stat:'컨디션',d:-14},
- {m:'광장',pub:0,t:'{말}이 갑자기 훈련량 2배로 늘렸다는데? 뭐 있나',stat:'뒷심',d:29,perm:1},
- {m:'찌라시',pub:0,t:'{말} 마방 내부 붕괴 직전. 이번 주 큰 거 터진다. 마지막 경고.',stat:'컨디션',d:-20},
- {m:'경마일보',pub:1,t:'{말}, 시즌 막판 관리 모드 — 훈련 강도 하향 조정 확인',stat:'컨디션',d:-6},
- {m:'터프',pub:1,t:'[충격] {말} 시즌 막판 방전 임박설!! 남은 힘이 없다',stat:'뒷심',d:-19,perm:1},
- {m:'광장',pub:0,t:'{말} 어제 비공개 계측에서 시즌 최고 기록 찍었다는 썰. 관계자 피셜',stat:'스피드',d:29,perm:1}
+ {m:'찌라시',pub:0,t:'[제보] {말} 준결승 앞두고 마주가 조교사 갈아치웠다는 얘기',stat:'컨디션',d:-13},
+ {m:'경마일보',pub:0,t:'{말}, 후반기 최다 상위권 진입 — 꾸준함으로 입증',stat:'컨디션',d:4},
+ {m:'김패독',pub:0,t:'"지금 폼으로 {말}을 이길 말은 없어요. 단언합니다"',stat:'컨디션',d:7},
+ {m:'터프',pub:0,t:'{말} 혹사 논란 — 피로 누적 심각설!!',stat:'컨디션',d:-10},
+ {m:'마방수첩',pub:0,t:'요즘 새벽마다 울음소리가 들림… {말} 칸 쪽에서',stat:'컨디션',d:-10},
+ {m:'광장',pub:0,t:'{말}이 갑자기 훈련량 2배로 늘렸다는데? 뭐 있나',stat:'뒷심',d:26,perm:1},
+ {m:'찌라시',pub:0,t:'{말} 마방 내부 붕괴 직전. 이번 주 큰 거 터진다. 마지막 경고.',stat:'컨디션',d:-14},
+ {m:'경마일보',pub:0,t:'{말}, 시즌 막판 관리 모드 — 훈련 강도 하향 조정 확인',stat:'컨디션',d:-4},
+ {m:'터프',pub:0,t:'[충격] {말} 시즌 막판 방전 임박설!! 남은 힘이 없다',stat:'뒷심',d:-17,perm:1},
+ {m:'광장',pub:0,t:'{말} 어제 비공개 계측에서 시즌 최고 기록 찍었다는 썰. 관계자 피셜',stat:'스피드',d:26,perm:1}
 ],
 [
- {m:'공시',pub:1,t:'',auto:1,noeff:1},
- {m:'공시',pub:1,t:'시즌 최종전 안내 — 전 출전마 최종 검진 통과',noeff:1},
- {m:'경마일보',pub:1,t:'{말}, 시즌 지표 1위 — 데이터는 거짓말하지 않는다',stat:'컨디션',d:6},
- {m:'김패독',pub:1,t:'"마지막 제 답은 정해져 있어요 — {말}입니다"',stat:'컨디션',d:10},
- {m:'터프',pub:0,t:'{말}, 유종의 미인가 몰락의 완성인가 — 마방 "최상" 주장',stat:'컨디션',d:14},
- {m:'광장',pub:0,t:'{말} 마지막까지 스태미나 버틸 수 있음?',stat:'뒷심',d:-29},
- {m:'찌라시',pub:0,t:'최종전 승부 밀약설 — 우승마는 이미 정해져 있다? {말}이라 함.',stat:'컨디션',d:20},
- {m:'경마일보',pub:1,t:'{말}, 최종전 대비 지구력 보강 훈련 완료 — 마무리 점검 통과',stat:'뒷심',d:12},
- {m:'김패독',pub:1,t:'"마지막 경주는 심장으로 뜁니다. {말} 심장은 진짜예요"',stat:'뒷심',d:19},
- {m:'마방수첩',pub:0,t:'{말} 어젯밤 한숨도 안 자고 서성이더라. 큰 경기 앞두고 예민해진 듯',stat:'컨디션',d:-14}
+ {m:'김패독',pub:0,t:'\"파이널입니다. {말}, 마지막이라고 다 쏟아붓겠죠. 뒷심 보세요\"',stat:'뒷심',d:19},
+ {m:'터프',pub:0,t:'[단독] {말} 기수, 시즌 마지막 경주 앞두고 컨디션 난조설',stat:'기수',d:-19},
+ {m:'경마일보',pub:0,t:'{말}, 시즌 지표 1위 — 데이터는 거짓말하지 않는다',stat:'컨디션',d:4},
+ {m:'김패독',pub:0,t:'"마지막 제 답은 정해져 있어요 — {말}입니다"',stat:'컨디션',d:7},
+ {m:'터프',pub:0,t:'{말}, 유종의 미인가 몰락의 완성인가 — 마방 "최상" 주장',stat:'컨디션',d:10},
+ {m:'광장',pub:0,t:'{말} 마지막까지 스태미나 버틸 수 있음?',stat:'뒷심',d:-26},
+ {m:'찌라시',pub:0,t:'최종전 승부 밀약설 — 우승마는 이미 정해져 있다? {말}이라 함.',stat:'컨디션',d:14},
+ {m:'경마일보',pub:0,t:'{말}, 최종전 대비 지구력 보강 훈련 완료 — 마무리 점검 통과',stat:'뒷심',d:11},
+ {m:'김패독',pub:0,t:'"마지막 경주는 심장으로 뜁니다. {말} 심장은 진짜예요"',stat:'뒷심',d:17},
+ {m:'마방수첩',pub:0,t:'{말} 어젯밤 한숨도 안 자고 서성이더라. 큰 경기 앞두고 예민해진 듯',stat:'컨디션',d:-10}
 ]
 ];
 const ALLH=['질풍','만리','중용','우직','적토','섬광','현무'];
@@ -351,28 +384,21 @@ function pickField(seed,round){
   for(let i=a.length-1;i>0;i--){const j=Math.floor(rng()*(i+1));[a[i],a[j]]=[a[j],a[i]];}
   return a.slice(0,5);
 }
-/* 라운드 풀 10장 중 7장 추첨: 공시 전량 고정 + 공개 채움(총 공개 4) + 히든 3 (시드 결정론) */
+/* 덱: 라운드 카드 10장 전량 발행 (전부 비공개 — 상점에서만 열람 가능) */
 function pickDeck(seed,round){
-  const rng=mulberry32(seed*23+round*15485863);
-  const pool=CARDS[round-1];
-  const fixed=[],pubs=[],hids=[];
-  pool.forEach((c,i)=>{c.noeff?fixed.push(i):(c.pub?pubs.push(i):hids.push(i));});
-  [pubs,hids].forEach(a=>{for(let i=a.length-1;i>0;i--){const j=Math.floor(rng()*(i+1));[a[i],a[j]]=[a[j],a[i]];}});
-  const deck=[...fixed,...pubs.slice(0,4-fixed.length),...hids.slice(0,3)];
-  deck.sort((a,b)=>a-b);
-  return deck;
+  return CARDS[round-1].map((c,i)=>i).filter(i=>!CARDS[round-1][i].noeff);
 }
-/* 카드 대상 배정: 앵커 없음, 균등 분배(말당 최대 2장) */
+/* 카드 대상 배정: 출전 5마리에 정확히 2장씩 */
 function assignTargets(seed,round,field,deck){
   const rng=mulberry32(seed*13+round*104729);
+  const slots=[];field.forEach(h=>{slots.push(h);slots.push(h);});
+  for(let i=slots.length-1;i>0;i--){const j=Math.floor(rng()*(i+1));[slots[i],slots[j]]=[slots[j],slots[i]];}
   const tg={},cnt={};field.forEach(h=>cnt[h]=0);
-  const pool=[...field];
-  for(let i=pool.length-1;i>0;i--){const j=Math.floor(rng()*(i+1));[pool[i],pool[j]]=[pool[j],pool[i]];}
-  let p=0;
-  deck.forEach(i=>{const c=CARDS[round-1][i];if(c.noeff)return;
-    let tries=0,tt=pool[p%pool.length];
-    while(cnt[tt]>=2&&tries<10){p++;tt=pool[p%pool.length];tries++;}
-    tg[i]=tt;cnt[tt]++;p++;});
+  const eff=deck.filter(i=>{const c=CARDS[round-1][i];return c&&!c.noeff;});
+  eff.forEach((i,k)=>{
+    let h=slots[k%slots.length];
+    if(cnt[h]>=2){h=field.find(x=>cnt[x]<2)||h;}
+    tg[i]=h;cnt[h]=(cnt[h]||0)+1;});
   return tg;
 }
 /* 진위 생성 v2: 앵커 폐지 · 시즌 추첨분 기준 매체별 비례 쿼터(사실 수 = 발행 수 × 신뢰도) · 히든 우선 0.85 */
@@ -389,13 +415,8 @@ function genTruth(seed){
   Object.keys(byMedia).forEach(m=>{
     const list=byMedia[m];
     const need=Math.round(list.length*MEDIA[m].rel);
-    const hid=list.filter(x=>x.hid),pub=list.filter(x=>!x.hid);
-    [hid,pub].forEach(a=>{for(let i=a.length-1;i>0;i--){const j=Math.floor(rng()*(i+1));[a[i],a[j]]=[a[j],a[i]];}});
-    const merged=[];
-    while(hid.length||pub.length){
-      merged.push(hid.length>0&&(pub.length===0||rng()<0.85)?hid.shift():pub.shift());
-    }
-    merged.forEach((x,k)=>truth[`${x.r}_${x.i}`]=k<need);
+    for(let i=list.length-1;i>0;i--){const j=Math.floor(rng()*(i+1));[list[i],list[j]]=[list[j],list[i]];}
+    list.forEach((x,k)=>truth[`${x.r}_${x.i}`]=k<need);
   });
   return truth;
 }
@@ -403,19 +424,59 @@ function raceRng(seed,round,horse){
   let h=seed+round*1000;for(const ch of horse)h+=ch.charCodeAt(0);
   return mulberry32(h)()*5;
 }
-/* 두자리 스탯 점수식: 기본=(가중 스탯)/50×60 · 진창 −(50−적응력)×0.3 · 피로 −0.15×(60−기수) */
-function baseWith(h,stArr,round,fatigue){
-  const [d,mud]=SCHEDULE[round-1];const w=DISTW[d];
-  let b=(stArr[0]*w[0]+stArr[1]*w[1]+stArr[2]*w[2])/50*60;
-  if(mud)b-=(50-stArr[3])*0.3;
-  if(fatigue===h)b-=0.15*(60-stArr[4]);
-  return b;
+/* ── 점수 3요소 ──
+   기본  = 거리 가중 스탯          (라운드 거리에 따라 스피드/스타트/뒷심 비중 변화)
+   환경  = 주로·바람·기온·게이트    (적응력/기수/스타트 등이 조건에 따라 작동)
+   정보  = 카드 효과 합 (캡 ±24)
+   목표 기여 비율 대략 2 : 3 : 5 */
+function baseOnly(stArr,round){
+  const S=SCHEDULE[round-1],w=DISTW[S.d];
+  return (stArr[0]*w[0]+stArr[1]*w[1]+stArr[2]*w[2])/50*BASE_SCALE;
+}
+function envOnly(stArr,round,gate,fatigue,isFat){
+  const S=SCHEDULE[round-1];let e=0;
+  e-=(50-stArr[3])*GOINGC[S.going];                       // 주로: 적응력
+  if(S.wind==='순풍')e+=(stArr[0]-38)*ENVC.wS;            // 순풍: 스피드형 유리
+  if(S.wind==='역풍')e+=(stArr[2]-33)*ENVC.wF;            // 역풍: 뒷심형 유리
+  if(S.temp==='혹서')e-=(50-stArr[4])*ENVC.tJ;           // 혹서: 기수 역량
+  if(S.temp==='혹한')e-=(50-stArr[1])*ENVC.tS;           // 혹한: 스타트 둔화
+  e+=(3-gate)*ENVC.gate+((stArr[1]-33)/50)*(gate-3)*ENVC.gateS;  // 게이트
+  if(isFat)e-=0.15*(60-stArr[4]);                        // 직전 우승 피로
+  return e;
+}
+function baseWith(h,stArr,round,fatigue,gate){
+  return baseOnly(stArr,round)+envOnly(stArr,round,gate||3,fatigue,fatigue===h);
+}
+/* 게이트 배정: 시드 결정론 (1=최내측 ~ 5=최외측) */
+function assignGates(seed,round,field){
+  const rng=mulberry32(seed*631+round*7919);
+  const a=[1,2,3,4,5];
+  for(let i=a.length-1;i>0;i--){const j=Math.floor(rng()*(i+1));[a[i],a[j]]=[a[j],a[i]];}
+  const g={};field.forEach((h,i)=>g[h]=a[i]);
+  return g;
+}
+/* 마사회 공식 정보 (100% 사실 · 전체 공개) */
+function kraNotice(round){
+  const S=SCHEDULE[round-1];
+  const dn={'단':'단거리 1200m','중':'중거리 1800m','장':'장거리 2400m'}[S.d];
+  const gs={'양호':'주로 양호 — 발밑이 단단합니다','다습':'주로 다습 — 군데군데 물기가 남아 있습니다','불량':'주로 불량 — 진창 구간이 넓게 형성됐습니다'}[S.going];
+  const ws={'무풍':'바람 거의 없음','순풍':'직선주로 순풍 — 속도가 실립니다','역풍':'직선주로 역풍 — 막판 체력 소모가 큽니다'}[S.wind];
+  const ts={'온화':'기온 온화','혹서':'폭염 경보 — 기수의 페이스 조절이 관건입니다','혹한':'한파 — 근육이 굳어 초반 반응이 둔해집니다'}[S.temp];
+  return {title:`제${round}경주 ${S.name} · ${dn}`,lines:[gs,ws,ts]};
 }
 /* 카드 1장의 근사 실효(사실일 때, 자문·미리보기용) */
 function impactPts(c,round){
   if(c.noeff)return 0;
   if(c.stat==='컨디션')return c.d;
-  const [d,mud]=SCHEDULE[round-1];const w=DISTW[d];
+  const S=SCHEDULE[round-1],w=DISTW[S.d];
+  const si=STATN.indexOf(c.stat);
+  if(si<=2)return c.d*w[si]*(BASE_SCALE/50);
+  if(c.stat==='적응력')return c.d*GOINGC[S.going];
+  if(c.stat==='기수')return S.temp==='혹서'?c.d*ENVC.tJ:0;
+  return 0;
+}
+function _impactOld(c,round){
+  const S=SCHEDULE[round-1],w=DISTW[S.d];
   const si=STATN.indexOf(c.stat);
   if(si<=2)return c.d*w[si]*1.2;
   if(c.stat==='적응력')return mud?c.d*0.3:0;
@@ -430,20 +491,35 @@ function truthOf(r,i){i=+i;
   if(i>=CUSTOM_BASE){const c=cardOf(r,i);return !!(c&&c.truth);}
   const T=truths();return !!(T&&T[`${r-1}_${i}`]);}
 function customIdx(r){return Object.keys(CUSTOM[r]||{}).map(Number).sort((a,b)=>a-b);}
-/* 커스텀 소식이 있으면 같은 구분(전체공개/상점)의 내장 카드를 그만큼 빼서 총량 유지 */
-function buildDeck(seed,r){
+/* 커스텀 소식의 대상 말들 — 해당 라운드 출전 자동 확정 */
+function customTargets(r){
+  return [...new Set(customIdx(r).map(i=>((CUSTOM[r]||{})[i]||{}).target).filter(h=>h&&ALLH.includes(h)))];
+}
+/* 라운드 구성: 출전마 + 덱 + 대상배정을 한 번에 (말당 정확히 2장 유지) */
+function buildRound(seed,r){
+  const must=customTargets(r);
+  const manual=manualField(seed,r)||[];
+  const locked=[...new Set([...must,...manual])].slice(0,5);
+  let field;
+  if(locked.length>=5)field=locked;
+  else{
+    const auto=pickField(seed,r).filter(h=>!locked.includes(h));
+    const pool=ALLH.filter(h=>!locked.includes(h)&&!auto.includes(h));
+    field=[...locked,...auto,...pool].slice(0,5);
+  }
   let deck=pickDeck(seed,r);
-  const cu=customIdx(r);
-  if(!cu.length)return deck;
+  const tg=assignTargets(seed,r,field,deck);
+  // 커스텀 1장당, 같은 대상 말에 배정된 내장 카드 1장을 밀어냄 → 말당 2장 유지
   const rng=mulberry32(seed*991+r*77);
-  cu.forEach(ci=>{
+  customIdx(r).forEach(ci=>{
     const c=(CUSTOM[r]||{})[ci];if(!c)return;
-    const cand=deck.filter(i=>{const b=CARDS[r-1][i];return b&&!b.noeff&&(!!b.pub===!!c.pub);});
-    if(!cand.length)return;
-    const drop=cand[Math.floor(rng()*cand.length)];
-    deck=deck.filter(i=>i!==drop);
+    const h=c.target&&field.includes(c.target)?c.target:field[Math.floor(rng()*field.length)];
+    const cand=deck.filter(i=>tg[i]===h);
+    if(cand.length){const drop=cand[Math.floor(rng()*cand.length)];
+      deck=deck.filter(i=>i!==drop);delete tg[drop];}
+    deck.push(ci);tg[ci]=h;
   });
-  return [...deck,...cu];
+  return {field,deck,tg};
 }
 db.ref(`${ROOT}/custom`).on('value',s=>{CUSTOM=s.val()||{};renderCustomList();});
 db.ref(`${ROOT}/desc`).on('value',s=>{DESC=s.val()||{};});
@@ -561,20 +637,20 @@ async function startSeason(){
   const seed=parseInt($('seedInput').value)||Math.floor(Math.random()*1e9);
   truthCache=null;cachedSeed=seed;
   const secs=parseInt($('betSecs').value)||300;
-  const field=manualField(seed,1)||pickField(seed,1);
-  const deck=buildDeck(seed,1);
-  const tg=assignTargets(seed,1,field,deck.filter(i=>i<CUSTOM_BASE));
-  customIdx(1).forEach(i=>{const c=CUSTOM[1][i];if(c&&c.target)tg[i]=c.target;});
+  const {field,deck,tg}=buildRound(seed,1);
+  const gates=assignGates(seed,1,field);
+  truthCache=genTruth(seed);cachedSeed=seed;
+  const capt=captainPicks(seed,1,field,deck,tg,gates,null,null);
   try{
     await db.ref(`${ROOT}/state`).set({phase:'open',round:1,seed,field,deck,fatigue:null,statMods:null,
-      cardTg:tg,deadline:Date.now()+secs*1000});
+      cardTg:tg,gates,captain:capt,kra:kraNotice(1),special:SPECIAL[1]||null,deadline:Date.now()+secs*1000});
     await db.ref(`${ROOT}/cardTg`).set({1:tg});
   }catch(e){dbError(e);return;}
   await db.ref(`${ROOT}/results`).remove();await db.ref(`${ROOT}/bets`).remove();
   await db.ref(`${ROOT}/owned`).remove();await db.ref(`${ROOT}/verified`).remove();
-  await db.ref(`${ROOT}/consult`).remove();await db.ref(`${ROOT}/log`).remove();
-  verifyReq={};consultReq={};inFlight.clear();
-  const ups={};Object.keys(players).forEach(id=>{ups[`${id}/money`]=100;ups[`${id}/welfareUsed`]=false;});
+await db.ref(`${ROOT}/log`).remove();
+  verifyReq={};inFlight.clear();
+  const ups={};Object.keys(players).forEach(id=>{ups[`${id}/money`]=START_MONEY;ups[`${id}/welfareUsed`]=false;ups[`${id}/credits`]=BUY_BASE;});
   if(Object.keys(ups).length)await db.ref(`${ROOT}/players`).update(ups);
   log(`시즌 개시 — seed ${seed}, 출전: ${field.map(disp).join(',')}${manualField(seed,1)?' (수동 지정 포함)':''}`);
 }
@@ -615,15 +691,19 @@ async function advanceRound(){
       log(`영구 반영: ${disp(tgt)} ${c.stat} ${c.d>0?'+':''}${c.d} (시즌 지속)`);
     }});
   const nr=r+1;
-  const field=manualField(state.seed,nr)||pickField(state.seed,nr);
-  const deck=buildDeck(state.seed,nr);
+  const {field,deck,tg}=buildRound(state.seed,nr);
   const fat=res&&field.includes(res.winner)?res.winner:null;
-  const tg=assignTargets(state.seed,nr,field,deck.filter(i=>i<CUSTOM_BASE));
-  customIdx(nr).forEach(i=>{const c=CUSTOM[nr][i];if(c&&c.target)tg[i]=c.target;});
+  const gates=assignGates(state.seed,nr,field);
   const secs=parseInt($('betSecs').value)||300;
+  // 구매 횟수: 기본 3회 + 직전 라운드 미사용분(1회 한정 이월, 최대 6)
+  const cu={};Object.keys(players).forEach(id=>{
+    const left=Math.max(0,Math.min(BUY_BASE,players[id].credits||0));
+    cu[`${id}/credits`]=Math.min(BUY_MAX,BUY_BASE+left);});
+  if(Object.keys(cu).length)await db.ref(`${ROOT}/players`).update(cu);
+  const capt=captainPicks(state.seed,nr,field,deck,tg,gates,mods,fat);
   await db.ref(`${ROOT}/state`).update({phase:'open',round:nr,field,deck,
-    fatigue:fat,statMods:mods,cardTg:tg,deadline:Date.now()+secs*1000,
-    showRanking:r===5});
+    fatigue:fat,statMods:mods,cardTg:tg,gates,captain:capt,kra:kraNotice(nr),
+    special:SPECIAL[nr]||null,deadline:Date.now()+secs*1000,showRanking:r===5});
   await db.ref(`${ROOT}/cardTg/${nr}`).set(tg);
   if(r===5)log('★ 중간 순위 공개 — 스크린에 표시');
   log(`라운드 ${nr} 시작 — 출전: ${field.map(disp).join(',')}${manualField(state.seed,nr)?' (수동 지정 포함)':''} (피로: ${fat?disp(fat):'-'}${res&&!field.includes(res.winner)?', 우승마 '+disp(res.winner)+' 휴식':''})`);
@@ -639,6 +719,60 @@ async function botFlush(){
   for(const id of ids){try{await botBet(id);}catch(e){log(`⚠ 봇 베팅 실패: ${players[id]?players[id].name:id}`);}}
 }
 
+/* ════════ 말대가리 캡틴의 천기누설 ════════
+   ① 스탯+환경만으로 최적인 말        (100% 정답 — 참가자도 계산 가능)
+   ② 실제 우승마                      (50% 확률로만 채택)
+   ③ 모든 정보의 진위가 뒤바뀌었을 때 우승마 (100% 정답)
+   중복 제거 후 3마리를 채워 무작위 순서로 공개 */
+const CAPT_LINES=[
+ '{말}, 오늘 이 말 안 잡으면 후회합니다',
+ '[속보] {말} 마방에서 흘러나온 이야기',
+ '{말} 사라, 진짜 이번이 마지막 기회다',
+ '아무도 안 보는 {말}… 저는 삽니다',
+ '{말}, 오늘 조건이 딱 맞아떨어집니다',
+ '{말} 놓치면 오늘 밤 잠 못 잡니다',
+ '전문가들이 {말}을 말 안 하는 이유',
+ '{말}, 데이터가 이상하게 좋습니다',
+ '이 채널만 아는 {말} 이야기',
+ '{말} 지금 안 잡으면 배당 다 날아갑니다'];
+function captainPicks(seed,round,field,deck,tg,gates,statMods,fatigue){
+  if(!field||!field.length)return [];
+  const eff=h=>{const s=[...HORSES[h].s];const mm=(statMods||{})[h]||{};
+    STATN.forEach((n,i)=>{if(mm[n])s[i]=Math.max(5,Math.min(60,s[i]+mm[n]));});return s;};
+  const noI={},real={},flip={};
+  field.forEach(h=>{
+    const st=eff(h),g=gates[h]||3;
+    const bp=baseOnly(st,round)+envOnly(st,round,g,fatigue,fatigue===h);
+    noI[h]=bp;
+    const calc=(useTruth)=>{
+      const ts=[...st];let flat=0;
+      deck.forEach(ci=>{const c=cardOf(round,ci);
+        if(!c||c.noeff||tg[ci]!==h)return;
+        const isT=truthOf(round,ci);
+        if(useTruth?!isT:isT)return;
+        if(c.stat==='컨디션'){flat+=c.d;return;}
+        const si=STATN.indexOf(c.stat);if(si<0)return;
+        ts[si]=Math.max(5,Math.min(60,ts[si]+c.d));});
+      const withI=baseOnly(ts,round)+envOnly(ts,round,g,fatigue,fatigue===h);
+      return bp+Math.max(-INFO_CAP,Math.min(INFO_CAP,withI-bp+flat));
+    };
+    real[h]=calc(true)+raceRng(seed,round,h);
+    flip[h]=calc(false);
+  });
+  const statBest=field.slice().sort((a,b)=>noI[b]-noI[a])[0];
+  const winner=field.slice().sort((a,b)=>real[b]-real[a])[0];
+  const flipBest=field.slice().sort((a,b)=>flip[b]-flip[a])[0];
+  const rng=mulberry32(seed*8191+round*3571);
+  const picks=[statBest,flipBest];
+  if(rng()<0.5)picks.push(winner);
+  const rest=field.filter(h=>!picks.includes(h));
+  for(let i=rest.length-1;i>0;i--){const j=Math.floor(rng()*(i+1));[rest[i],rest[j]]=[rest[j],rest[i]];}
+  const set=[];picks.forEach(h=>{if(!set.includes(h))set.push(h);});
+  while(set.length<3&&rest.length)set.push(rest.shift());
+  for(let i=set.length-1;i>0;i--){const j=Math.floor(rng()*(i+1));[set[i],set[j]]=[set[j],set[i]];}
+  return set.map((h,k)=>({h,t:CAPT_LINES[Math.floor(rng()*CAPT_LINES.length)].replace(/\{말\}/g,disp(h))}));
+}
+
 /* ════════ 경주 계산 + 정산 (보험 제거) ════════ */
 function effStats(h){const s=[...HORSES[h].s];const mods=(state.statMods||{})[h]||{};
   STATN.forEach((n,i)=>{if(mods[n])s[i]=Math.max(5,Math.min(60,s[i]+mods[n]));});return s;}
@@ -648,9 +782,15 @@ async function runRace(){
   const r=state.round,T=truths();const field=Object.values(state.field);
   const deck=Object.values(state.deck||{});
   const rtg=state.cardTg||{};
-  // 1) 영구효과만 반영된 기본점수
-  const basePerm={},bases={};
-  field.forEach(h=>{basePerm[h]=baseWith(h,effStats(h),r,state.fatigue);bases[h]=fmt(basePerm[h]);});
+  const gates=state.gates||{};
+  // 1) 영구효과만 반영된 기본점수 (기본 / 환경 분리 기록)
+  const basePerm={},bases={},baseP={},envP={},statSnap={};
+  field.forEach(h=>{
+    const st=effStats(h),g=gates[h]||3;
+    baseP[h]=fmt(baseOnly(st,r));
+    envP[h]=fmt(envOnly(st,r,g,state.fatigue,state.fatigue===h));
+    basePerm[h]=baseP[h]+envP[h];bases[h]=fmt(basePerm[h]);
+    statSnap[h]=st;});
   // 2) 사실인 카드의 스탯/컨디션 실효 적용
   const tempSt={},flat={};
   field.forEach(h=>{tempSt[h]=effStats(h);flat[h]=0;});
@@ -665,7 +805,9 @@ async function runRace(){
   // 3) 정보효과 = (실효 반영 기본 − 영구 기본) + 컨디션, ±12 캡
   const infos={},scores={};
   field.forEach(h=>{
-    const diff=baseWith(h,tempSt[h],r,state.fatigue)-basePerm[h]+flat[h];
+    const g=gates[h]||3;
+    const withI=baseOnly(tempSt[h],r)+envOnly(tempSt[h],r,g,state.fatigue,state.fatigue===h);
+    const diff=withI-basePerm[h]+flat[h];
     infos[h]=fmt(Math.max(-INFO_CAP,Math.min(INFO_CAP,diff)));
     scores[h]=fmt(basePerm[h]+infos[h]+raceRng(state.seed,r,h));
   });
@@ -684,14 +826,23 @@ async function runRace(){
   });
   const truthsOut={};deck.forEach(ci=>{const c=cardOf(r,ci);if(c&&!c.noeff)truthsOut[ci]=truthOf(r,ci);});
   const moneyBefore={};Object.keys(players).forEach(id=>moneyBefore[id]=players[id].money);
+  const env=SCHEDULE[r-1];
   await db.ref(`${ROOT}/results/${r}`).set({field,deck,bases,infos,scores,order,winner,odds,pool,total,
+    baseP,envP,gates,stats:statSnap,cardTg:rtg,
+    env:{d:env.d,going:env.going,wind:env.wind,temp:env.temp,name:env.name},
+    special:SPECIAL[r]?{rank:SPECIAL[r].rank,mult:SPECIAL[r].mult,horse:order[SPECIAL[r].rank-1]}:null,
     welfareExcess,truths:truthsOut,moneyBefore,t:Date.now()});
   await db.ref(`${ROOT}/state/phase`).set('race');
   log(`R${r} 계산 완료 — 우승 ${disp(winner)} (${scores[winner]}점), 배당 ${odds[winner]||0}배`);
+  if(sp)log(`★ 스페셜 R${r} — ${sp.rank}위 ${disp(spHorse)} 적중자에게 ×${sp.mult}배 지급 (총 ${fmt(spPaid)}만 주입)`);
+  const sp=SPECIAL[r];
+  const spHorse=sp?order[sp.rank-1]:null;
+  let spPaid=0;
   const ups={};
   for(const id of Object.keys(rb)){
     const b=rb[id];let back=0;
     if(b.stakes[winner])back+=b.stakes[winner]*(odds[winner]||0);
+    if(sp&&spHorse&&b.stakes[spHorse]){const bonus=fmt(b.stakes[spHorse]*sp.mult);back+=bonus;spPaid+=bonus;}
     if(back>0)ups[`${id}/money`]=fmt(players[id].money+back);
   }
   if(Object.keys(ups).length)await db.ref(`${ROOT}/players`).update(ups);
@@ -733,7 +884,7 @@ function autoTick(){
     runRace();
   }else if(state.phase==='race'){
     if(!raceAt)raceAt=Date.now(); // 새로고침 등으로 시작 시각을 모르면 지금부터 다시 대기
-    const dur={'단':13,'중':20,'장':27}[SCHEDULE[state.round-1][0]]+16; // 배당 공개 프리롤(~9초)+연출+우승 배너 여유
+    const dur={'단':13,'중':20,'장':27}[SCHEDULE[state.round-1].d]+16; // 배당 공개 프리롤(~9초)+연출+우승 배너 여유
     const s=Math.ceil((raceAt+(dur+10)*1000-Date.now())/1000);
     if(s>0){msg.textContent=`자동: ${s}초 후 정산 공개`;return;}
     if(autoDoneKey===key)return;
@@ -826,7 +977,7 @@ async function addBots(){
     if(used.has(nm))continue;
     used.add(nm);
     const persona=PK[Math.floor(Math.random()*PK.length)];
-    ups['bot_'+Date.now().toString(36)+'_'+made]={name:nm,money:100,
+    ups['bot_'+Date.now().toString(36)+'_'+made]={name:nm,money:START_MONEY,credits:BUY_BASE,
       welfareUsed:false,bot:true,persona,traits:makeTraits(persona),joinedAt:Date.now()};
     made++;
   }
@@ -848,19 +999,62 @@ async function removeBots(){
 /* ── 봇 판단: 공개 소식 + 매체 신뢰도만 사용 (진위 접근 없음) ── */
 function botEstimate(uid,extraIdx){
   const p=players[uid],pr=traitsOf(uid);
-  const r=state.round,field=Object.values(state.field);
-  const deck=Object.values(state.deck||{}),tg=state.cardTg||{};
+  const r=state.round,field=Object.values(state.field||{});
+  const gates=state.gates||{},deck=Object.values(state.deck||{}),tg=state.cardTg||{};
+  const owned=((ownedAll[uid]||{})[r])||{};
   const est={};
-  field.forEach(h=>est[h]=baseScore(h)); // 공개된 능력치·조건은 봇도 알 수 있음
+  field.forEach(h=>{const st=effStats(h);
+    est[h]=baseOnly(st,r)+envOnly(st,r,gates[h]||3,state.fatigue,state.fatigue===h);});
+  // 구매한 정보만 반영 (매체 신뢰도를 성향에 따라 가중)
   deck.forEach(ci=>{
+    if(!owned[ci]&&ci!==extraIdx)return;
     const c=cardOf(r,ci),h=tg[ci];
-    if(!c||c.noeff||!h||!field.includes(h))return;
-    if(!c.pub&&ci!==extraIdx)return; // 사지 않은 히든은 보이지 않음
-    const rel=Math.pow(MEDIA[c.m].rel,pr.skew); // 신뢰도를 성향대로 가중
-    est[h]+=impactPts(c,r)*rel;
-  });
-  field.forEach(h=>est[h]+=(Math.random()-0.5)*3.5); // 판단 오차
+    if(!c||c.noeff||!h||est[h]===undefined)return;
+    est[h]+=impactPts(c,r)*Math.pow((MEDIA[c.m]||{rel:.5}).rel,pr.skew);});
+  field.forEach(h=>est[h]+=(Math.random()-0.5)*3.5);
   return est;
+}
+
+/* 봇의 정보 구매: 천기누설 후보 중 '스탯+환경 최적마'를 제외한 말들을 우선 조사 */
+async function botBuyInfo(uid){
+  const p=players[uid];if(!p)return {};
+  const r=state.round,pr=traitsOf(uid);
+  const owned=((ownedAll[uid]||{})[r])||{};
+  let credits=Math.max(0,p.credits!==undefined?p.credits:BUY_BASE);
+  let money=p.money;
+  const capt=(state.captain||[]).map(x=>x.h);
+  const field=Object.values(state.field||{});
+  const gates=state.gates||{};
+  // 스탯+환경만으로 최적인 말 (봇도 참가자와 동일하게 계산 가능)
+  const noI={};field.forEach(h=>{const st=effStats(h);
+    noI[h]=baseOnly(st,r)+envOnly(st,r,gates[h]||3,state.fatigue,state.fatigue===h);});
+  const statBest=field.slice().sort((a,b)=>noI[b]-noI[a])[0];
+  const focus=capt.filter(h=>h!==statBest);
+  const deck=Object.values(state.deck||{}),tg=state.cardTg||{};
+  const cand=deck.filter(i=>!owned[i]).sort((a,b)=>{
+    const ha=tg[a],hb=tg[b];
+    const sa=(focus.includes(ha)?2:0)+(capt.includes(ha)?1:0);
+    const sb=(focus.includes(hb)?2:0)+(capt.includes(hb)?1:0);
+    return sb-sa;});
+  // 성향별 구매 의욕 + 이월 판단(후보가 좁혀진 라운드에 더 씀)
+  const eager=(pr.buy!==undefined?pr.buy:0.4);
+  let want=Math.round(eager*BUY_BASE+(focus.length<=1?1:0));
+  want=Math.max(0,Math.min(want,credits,cand.length,Math.floor(money*0.30/PRICES.info)));
+  const got={};
+  for(let k=0;k<want;k++){
+    const ci=cand[k];if(ci===undefined)break;
+    const res=await db.ref(`${ROOT}/players/${uid}/money`).transaction(m=>{
+      if(m===null)return m;if(m<PRICES.info)return;return fmt(m-PRICES.info);});
+    if(!(res.committed&&typeof res.snapshot.val()==='number'))break;
+    money=res.snapshot.val();
+    try{await db.ref(`${ROOT}/owned/${uid}/${r}/${ci}`).set(true);}catch(e){break;}
+    got[ci]=true;credits--;
+  }
+  if(Object.keys(got).length){
+    await db.ref(`${ROOT}/players/${uid}/credits`).set(credits);
+    log(`🛒 ${p.name} 정보 ${Object.keys(got).length}건 구매 (잔여 ${credits}회)`);
+  }
+  return got;
 }
 async function botBet(uid,opt){
   opt=opt||{};
@@ -873,21 +1067,13 @@ async function botBet(uid,opt){
   if(!field.length)return;
   let money=(typeof opt.money==='number')?opt.money:p.money;
   if(!(money>=2))return; // 자금 부족 — 구제 대상
-  // 1) 히든 정보 구매 (성향별 확률) — 내용은 보되 진위는 모름
-  let extraIdx=null;
-  if(Math.random()<pr.buy&&money>25){
-    const hid=Object.values(state.deck||{}).filter(i=>{const c=cardOf(r,i);return c&&!c.pub&&!c.noeff;});
-    if(hid.length){
-      extraIdx=hid[Math.floor(Math.random()*hid.length)];
-      const res=await db.ref(`${ROOT}/players/${uid}/money`).transaction(m=>{
-        if(m===null)return m;                 // 캐시 미도착 — 중단하지 말고 재시도되게
-        if(m<PRICES.hidden)return;            // 잔액 부족만 취소
-        return fmt(m-PRICES.hidden);});
-      if(res.committed&&typeof res.snapshot.val()==='number')money=res.snapshot.val();else extraIdx=null;
-    }
+  // 1) 정보 구매 (천기누설 활용 · 재베팅 시에는 생략)
+  if(!opt.revise){
+    try{await botBuyInfo(uid);}catch(e){}
+    if(players[uid]&&typeof players[uid].money==='number')money=players[uid].money;
   }
-  // 2) 추정 → 확률화
-  const est=botEstimate(uid,extraIdx);
+  // 2) 추정 → 확률화 (보유한 정보만 반영)
+  const est=botEstimate(uid,null);
   const mx=Math.max(...field.map(h=>est[h]));
   let sum=0;const w={};
   field.forEach(h=>{w[h]=Math.exp((est[h]-mx)/pr.tau);sum+=w[h];});
@@ -1074,6 +1260,12 @@ async function addCustom(){
   if(!isFinite(d)||d===0)return alert('수치는 0이 아닌 숫자여야 합니다.');
   const stat=$('cStat').value;
   if(Math.abs(d)>40)return alert('수치는 ±40 이내로 입력하세요.');
+  const tgs=customTargets(r);
+  const nt=$('cTarget').value;
+  if(!tgs.includes(nt)&&tgs.length>=5){
+    alert(`R${r}에는 이미 5마리(${tgs.map(disp).join(', ')})의 정보가 작성돼 있습니다.\n출전은 5마리뿐이라 더 추가하면 일부가 출전하지 못합니다.`);
+    return;
+  }
   const idx=CUSTOM_BASE+Object.keys(CUSTOM[r]||{}).length;
   const card={m:$('cMedia').value,pub:parseInt($('cPub').value),t:txt,stat,d,
     truth:$('cTruth').value==='1',target:$('cTarget').value,perm:parseInt($('cPerm').value)?1:0};
@@ -1094,15 +1286,81 @@ function renderCustomList(){
   const r=parseInt(rs.value),list=CUSTOM[r]||{};
   const ks=Object.keys(list).map(Number).sort((a,b)=>a-b);
   if(!ks.length){box.innerHTML='<span class="small">R'+r+' 에 작성된 정보 없음</span>';return;}
-  box.innerHTML=`<div class="small" style="margin-bottom:5px">R${r} 예약된 정보 ${ks.length}건</div>`+
+  const tgs=customTargets(r);
+  const warn=tgs.length>5?`<div style="color:var(--down);font-size:12px;margin-bottom:5px">⚠ 대상 말이 ${tgs.length}마리 — 출전은 5마리뿐이라 일부는 반영되지 않습니다</div>`:'';
+  box.innerHTML=warn+`<div class="small" style="margin-bottom:5px">R${r} 예약된 정보 ${ks.length}건 · 대상 ${tgs.length}마리(전원 출전 확정)</div>`+
     ks.map(i=>{const c=list[i];
       return `<div style="border:1px solid var(--line);border-radius:8px;padding:7px 10px;margin-bottom:5px">
-        <div><b>${c.pub?'전체공개':'🛒 상점'}</b> · ${MEDIA[c.m]?MEDIA[c.m].name:c.m} · <b style="color:${c.d>0?'var(--up)':'var(--down)'}">${disp(c.target)} ${c.stat} ${c.d>0?'+':''}${c.d}</b>
+        <div><b>${c.pub?'📢 특별공지':'🛒 상점'}</b> · ${MEDIA[c.m]?MEDIA[c.m].name:c.m} · <b style="color:${c.d>0?'var(--up)':'var(--down)'}">${disp(c.target)} ${c.stat} ${c.d>0?'+':''}${c.d}</b>
           ${c.perm?' <span style="color:var(--amber)">★지속</span>':''}
           <span class="${c.truth?'truth-t':'truth-f'}">${c.truth?'사실':'거짓'}</span>
           <button onclick="delCustom(${r},${i})" style="float:right;padding:2px 8px;font-size:11px">삭제</button></div>
         <div style="font-size:12px;color:var(--muted);margin-top:3px">${(c.t||'').replace(/\{말\}/g,disp(c.target))}</div>
       </div>`;}).join('');
+}
+
+/* ════════ 스페셜 라운드 ════════ */
+let SPECIAL={};
+db.ref(`${ROOT}/special`).on('value',s=>{SPECIAL=s.val()||{};renderSpecial();});
+function initSpecialUI(){
+  const el=$('spRound');if(!el)return;
+  el.innerHTML=Array.from({length:10},(_,i)=>`<option value="${i+1}">R${i+1}</option>`).join('');
+  renderSpecial();
+}
+async function addSpecial(){
+  const r=parseInt($('spRound').value);
+  try{await db.ref(`${ROOT}/special/${r}`).set({rank:parseInt($('spRank').value),mult:parseInt($('spMult').value)});}
+  catch(e){dbError(e);return;}
+  log(`스페셜 지정 — R${r} ${$('spRank').value}위 ×${$('spMult').value}배`);
+}
+async function presetSpecial(){
+  try{await db.ref(`${ROOT}/special`).set({3:{rank:2,mult:4},6:{rank:2,mult:4},9:{rank:2,mult:4}});}
+  catch(e){dbError(e);return;}
+  log('스페셜 권장 프리셋 적용 — R3·R6·R9 2위 ×4배');
+}
+async function delSpecial(r){
+  try{await db.ref(`${ROOT}/special/${r}`).remove();}catch(e){dbError(e);return;}
+  log(`스페셜 해제 — R${r}`);
+}
+function renderSpecial(){
+  const box=$('spList');if(!box)return;
+  const ks=Object.keys(SPECIAL).map(Number).sort((a,b)=>a-b);
+  if(!ks.length){box.innerHTML='<span class="small">지정된 스페셜 라운드 없음</span>';return;}
+  box.innerHTML=ks.map(r=>{const s=SPECIAL[r];
+    return `<div style="border:1px solid var(--amber);border-radius:8px;padding:6px 10px;margin-bottom:5px;font-size:13px">
+      <b style="color:var(--amber)">R${r}</b> — ${s.rank}위 적중 시 베팅액 <b>×${s.mult}배</b> 추가 지급
+      <button onclick="delSpecial(${r})" style="float:right;padding:2px 8px;font-size:11px">해제</button></div>`;}).join('');
+}
+
+/* ════════ 상점 판매 현황 ════════ */
+let ownedAll={},verifiedAll={};
+db.ref(`${ROOT}/owned`).on('value',s=>{ownedAll=s.val()||{};renderShopBoard();});
+db.ref(`${ROOT}/verified`).on('value',s=>{verifiedAll=s.val()||{};renderShopBoard();});
+function renderShopBoard(){
+  const box=$('shopBoard');if(!box)return;
+  const maxR=state&&state.round?state.round:0;
+  if(!maxR){box.textContent='시즌 시작 전';return;}
+  let html=`<table style="width:100%;border-collapse:collapse;font-size:12px">
+    <tr><th style="text-align:left">R</th><th style="text-align:right">정보권</th><th style="text-align:right">판별권</th>
+      <th style="text-align:right">매출</th><th style="text-align:left;padding-left:10px">많이 팔린 말</th></tr>`;
+  let tI=0,tV=0;
+  for(let r=1;r<=maxR;r++){
+    let info=0,ver=0;const byH={};
+    Object.keys(ownedAll).forEach(u=>{const o=(ownedAll[u]||{})[r]||{};
+      Object.keys(o).forEach(ci=>{if(!o[ci])return;info++;
+        const h=(state.cardTg||{})[ci];
+        if(r===state.round&&h)byH[h]=(byH[h]||0)+1;});});
+    Object.keys(verifiedAll).forEach(u=>{const v=(verifiedAll[u]||{})[r];
+      if(v&&v.idx!==undefined)ver+=(v.count||1);});
+    tI+=info;tV+=ver;
+    const top=Object.keys(byH).sort((a,b)=>byH[b]-byH[a]).slice(0,3)
+      .map(h=>`${disp(h)} ${byH[h]}`).join(' · ');
+    html+=`<tr${r===maxR?' style="color:var(--amber)"':''}><td>R${r}</td><td class="num">${info}</td><td class="num">${ver}</td>
+      <td class="num">${info*PRICES.info+ver*PRICES.verify}만</td><td style="padding-left:10px">${top||'—'}</td></tr>`;
+  }
+  html+=`<tr style="border-top:1px solid var(--line);font-weight:700"><td>계</td><td class="num">${tI}</td><td class="num">${tV}</td>
+    <td class="num">${tI*PRICES.info+tV*PRICES.verify}만</td><td></td></tr></table>`;
+  box.innerHTML=html;
 }
 
 /* ════════ 진위 미리보기 / 수동 지급 ════════ */
@@ -1113,7 +1371,7 @@ function togglePeek(){
   if(!state){$('peekBox').textContent='시즌 없음';return;}
   const T=truths();let html='';
   for(let r=1;r<=10;r++){
-    const deck=buildDeck(state.seed,r);
+    const deck=buildRound(state.seed,r).deck;
     html+=`<b>R${r}</b>: `;
     html+=deck.map(i=>{const c=cardOf(r,i);
       if(c.noeff)return null;
@@ -1126,9 +1384,8 @@ function togglePeek(){
 }
 
 /* ════════ 판별·자문 자동 응답 (주기 스윕 — 이벤트 유실·로드 순서에 영향받지 않음) ════════ */
-let verifyReq={},consultReq={},inFlight=new Set(),pendCnt=0;
+let verifyReq={},inFlight=new Set(),pendCnt=0;
 db.ref(`${ROOT}/verified`).on('value',s=>{verifyReq=s.val()||{};sweepRequests();});
-db.ref(`${ROOT}/consult`).on('value',s=>{consultReq=s.val()||{};sweepRequests();});
 setInterval(sweepRequests,1500);
 function sweepRequests(){
   if(!authed||!state||state.seed===undefined){countPending();return;}
@@ -1148,50 +1405,14 @@ function sweepRequests(){
         .finally(()=>inFlight.delete(key));
     });
   });
-  // ── 전문가 자문: 해당 라운드 상태가 필요 ──
-  Object.keys(consultReq).forEach(u=>{
-    const c=consultReq[u];
-    if(!c||!c.req||c.answer!==undefined)return;
-    const key='c:'+u;if(inFlight.has(key))return;
-    if(c.round!==state.round){ // 라운드가 넘어간 지난 요청 — 무한 대기 방지
-      inFlight.add(key);
-      db.ref(`${ROOT}/consult/${u}/answer`).set('해당 라운드가 종료되어 소견을 전달하지 못했습니다. 진행자에게 문의해주세요.')
-        .catch(e=>dbError(e)).finally(()=>inFlight.delete(key));
-      return;
-    }
-    const h=c.horse;
-    if(!state.field||!Object.values(state.field).includes(h))return;
-    inFlight.add(key);
-    db.ref(`${ROOT}/consult/${u}/answer`).set(consultText(h))
-      .then(()=>log(`자문 응답: ${players[u]?players[u].name:u} → ${disp(h)}`))
-      .catch(e=>dbError(e))
-      .finally(()=>inFlight.delete(key));
-  });
   countPending();
 }
 function countPending(){
   let n=0;
   Object.values(verifyReq).forEach(rs=>{if(rs)Object.values(rs).forEach(v=>{if(v&&v.idx!==undefined&&v.answer===undefined)n++;});});
-  Object.values(consultReq).forEach(c=>{if(c&&c.req&&c.answer===undefined)n++;});
   pendCnt=n;
   const el=$('stStatus');
   if(el&&el.dataset.base!==undefined)el.textContent=el.dataset.base+(n?` · ⏳ 미응답 요청 ${n}건`:'');
-}
-/* 자문 소견: 공개 소식 중 사실만 반영 + 오차 (숨은 소식·진위는 알려주지 않음) */
-function consultText(h){
-  const r=state.round,T=truths();
-  let est=baseScore(h);
-  const deck=Object.values(state.deck||{});const rtg=state.cardTg||{};
-  deck.forEach(ci=>{const cd=cardOf(r,ci);
-    if(!cd||cd.noeff||!cd.pub||rtg[ci]!==h)return;
-    if(truthOf(r,ci))est+=impactPts(cd,r);});
-  est+=(Math.random()-0.5)*6;
-  const others=Object.values(state.field).filter(o=>o!==h).map(o=>baseScore(o));
-  const above=others.filter(o=>o>est).length;
-  const tone=above===0?'오늘 다섯 마리 중 가장 높게 봅니다':above<=1?'상위권으로 봅니다':above<=2?'중위권 안팎으로 봅니다':'오늘은 쉽지 않아 보입니다';
-  const pct=Math.max(5,Math.min(99,Math.round(est/60*100)));
-  const [d,mud]=SCHEDULE[r-1];
-  return `오늘 조건(${d}거리 · 주로 ${mud?'불량':'양호'}) 기준, ${disp(h)}의 종합 전력을 100점 만점에 ${pct}점 수준으로 평가합니다. ${tone}. 단, 저는 공개된 소식까지만 봅니다 — 물밑 정보는 제 영역 밖입니다.`;
 }
 async function grant(){
   const id=$('grantWho').value,amt=parseFloat($('grantAmt').value);
@@ -1199,7 +1420,7 @@ async function grant(){
   await db.ref(`${ROOT}/players/${id}/money`).transaction(m=>fmt((m||0)+amt));
   log(`수동 지급: ${players[id].name} +${amt}만`);
 }
-renderNameRows();renderFieldRows();initCustomUI();
+renderNameRows();renderFieldRows();initCustomUI();initSpecialUI();
 </script>
 </body>
 </html>
