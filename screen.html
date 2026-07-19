@@ -9,11 +9,12 @@
 :root{--track:#10231C;--board:#0B1512;--panel:#163026;--line:#24443A;--amber:#FFB020;--chalk:#F2EFE6;--muted:#9DB4AA;--up:#5BC77E;--down:#E06A5A}
 *{margin:0;padding:0;box-sizing:border-box}
 body{background:var(--track);color:var(--chalk);font-family:'Pretendard',sans-serif;overflow:hidden;height:100vh}
-.stage{height:100vh;display:flex;flex-direction:column;padding:28px 40px}
-.top{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:18px}
+.stage{height:100vh;display:flex;flex-direction:column;padding:24px 40px}
+.top{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:14px}
 .logo{font-family:'Black Han Sans';font-size:30px}.logo span{color:var(--amber)}
 .rphase{font-family:'Chakra Petch',monospace;font-size:20px;color:var(--amber)}
-.center{flex:1;display:flex;flex-direction:column;justify-content:center}
+.center{flex:1;display:flex;flex-direction:column;justify-content:center;
+  padding-bottom:var(--topcomp,52px)} /* 상단 헤더 높이만큼 보정 — 화면 정중앙 정렬 */
 h1.big{font-family:'Black Han Sans';font-size:64px;text-align:center}
 h1.big span{color:var(--amber)}
 .subbig{text-align:center;color:var(--muted);font-size:20px;margin-top:12px}
@@ -40,8 +41,8 @@ h1.big span{color:var(--amber)}
 .clock{font-family:'Chakra Petch',monospace;font-size:170px;text-align:center;color:var(--amber);
   text-shadow:0 0 40px rgba(255,176,32,.45)}
 /* 레이스 */
-.trackbox{background:var(--board);border:2px solid var(--line);border-radius:16px;padding:26px 0;position:relative}
-.lane{height:64px;border-bottom:1px dashed var(--line);position:relative;display:flex;align-items:center}
+.trackbox{background:var(--board);border:2px solid var(--line);border-radius:16px;padding:min(26px,3vh) 0;position:relative}
+.lane{height:min(64px,8.2vh);border-bottom:1px dashed var(--line);position:relative;display:flex;align-items:center}
 .lane:last-child{border:none}
 .runner{position:absolute;left:1%;display:flex;align-items:center;gap:8px;transition:none;will-change:left}
 .runner .em{font-size:40px;transform:scaleX(-1)}
@@ -250,6 +251,15 @@ const CARDS=[
 let state=null,players={},results={},lastRendered='',clockT=null,NAMES={};
 const disp=h=>NAMES[h]||h;
 const C=document.getElementById('center'),RP=document.getElementById('rphase');
+/* 상단 헤더의 실제 높이를 재서 본문이 화면 정중앙에 오도록 보정 */
+function fitStage(){
+  const top=document.querySelector('.top');if(!top)return;
+  const mb=parseFloat(getComputedStyle(top).marginBottom)||0;
+  document.documentElement.style.setProperty('--topcomp',(top.offsetHeight+mb)+'px');
+}
+window.addEventListener('resize',fitStage);
+window.addEventListener('load',fitStage);
+fitStage();
 const fmt=n=>Math.round(n*10)/10;
 db.ref(`${ROOT}/state`).on('value',s=>{state=s.val();render();});
 db.ref(`${ROOT}/players`).on('value',s=>{players=s.val()||{};if(state&&['lobby','final'].includes(state.phase))render(true);});
@@ -346,18 +356,18 @@ function renderRace(){
     return ob-oa;});
   C.innerHTML=`
   <div class="condbar">ROUND ${state.round} — 베팅 마감 · 확정 배당 공개</div>
-  <div id="oddsStage" style="display:flex;flex-direction:column;gap:13px;align-items:center;margin-top:26px;min-height:340px"></div>
-  <div id="preCount" style="font-family:'Black Han Sans';font-size:150px;color:var(--amber);text-align:center;line-height:1;min-height:160px"></div>`;
+  <div id="oddsStage" style="display:flex;flex-direction:column;gap:min(13px,1.4vh);align-items:center;justify-content:center;margin-top:min(20px,2.4vh);min-height:min(340px,38vh)"></div>
+  <div id="preCount" style="font-family:'Black Han Sans';font-size:min(150px,17vh);color:var(--amber);text-align:center;line-height:1;min-height:min(160px,19vh)"></div>`;
   const stage=document.getElementById('oddsStage');
   revealOrder.forEach((h,k)=>{
     setTimeout(()=>{
       if(!state||state.phase!=='race'||!document.getElementById('oddsStage'))return;
       const el=document.createElement('div');
       el.className='oddsreveal';
-      el.style.cssText='display:flex;align-items:center;gap:18px;border:1.5px solid rgba(255,176,32,.5);border-radius:14px;padding:10px 26px;background:rgba(255,176,32,.06)';
-      el.innerHTML=`<span style="font-family:'Black Han Sans';font-size:34px;color:${HORSES[h].c}">🐎 ${disp(h)}</span>
-        <span style="font-family:'Chakra Petch',monospace;font-size:38px;color:var(--amber);font-weight:700">${res.pool[h]?(res.odds[h]||0).toFixed(2)+'배':'무배당'}</span>
-        <span style="font-size:16px;color:var(--muted)">판돈 ${res.pool[h]?fmt(res.pool[h])+'만':'—'}</span>`;
+      el.style.cssText='display:flex;align-items:center;gap:18px;border:1.5px solid rgba(255,176,32,.5);border-radius:14px;padding:min(10px,1.2vh) 26px;background:rgba(255,176,32,.06)';
+      el.innerHTML=`<span style="font-family:'Black Han Sans';font-size:min(34px,3.9vh);color:${HORSES[h].c}">🐎 ${disp(h)}</span>
+        <span style="font-family:'Chakra Petch',monospace;font-size:min(38px,4.3vh);color:var(--amber);font-weight:700">${res.pool[h]?(res.odds[h]||0).toFixed(2)+'배':'무배당'}</span>
+        <span style="font-size:min(16px,2vh);color:var(--muted)">판돈 ${res.pool[h]?fmt(res.pool[h])+'만':'—'}</span>`;
       stage.appendChild(el);
     },k*1100);
   });
