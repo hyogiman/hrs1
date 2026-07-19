@@ -114,6 +114,9 @@ const HORSES={ // s:[스피드,스타트,뒷심,적응력,기수]
  '섬광':{s:[41,39,22,13,35],c:'#EFE14A',tag:'검증 없는 신마'},
  '현무':{s:[30,23,41,20,36],c:'#5A6B78',tag:'내구형 예비마'}};
 const STATN2=['스피드','스타트','뒷심','적응력','기수'];
+const CUSTOM_BASE=100;
+let CUSTOM={};
+function cardOf(r,i){i=+i;return i>=CUSTOM_BASE?((CUSTOM[r]||{})[i]||null):CARDS[r-1][i];}
 function effStats2(h){const st=[...HORSES[h].s];const mods=(state&&state.statMods||{})[h]||{};
   STATN2.forEach((n,i)=>{if(mods[n])st[i]=Math.max(5,Math.min(60,st[i]+mods[n]));});return st;}
 const SCHEDULE=[['중',0],['단',0],['장',0],['중',1],['단',0],['장',1],['중',0],['단',1],['중',0],['장',0]];
@@ -250,6 +253,7 @@ const C=document.getElementById('center'),RP=document.getElementById('rphase');
 const fmt=n=>Math.round(n*10)/10;
 db.ref(`${ROOT}/state`).on('value',s=>{state=s.val();render();});
 db.ref(`${ROOT}/players`).on('value',s=>{players=s.val()||{};if(state&&['lobby','final'].includes(state.phase))render(true);});
+db.ref(`${ROOT}/custom`).on('value',s=>{CUSTOM=s.val()||{};});
 db.ref(`${ROOT}/results`).on('value',s=>{results=s.val()||{};
   if(state&&(state.phase==='race'||state.phase==='result'))render(true);});
 db.ref(`${ROOT}/names`).on('value',s=>{NAMES=s.val()||{};render(true);});
@@ -315,7 +319,7 @@ function renderOpen(){
   },250);
   // 공개 소식 순환 티커
   const dkT=state.deck?Object.values(state.deck).map(Number):CARDS[state.round-1].map((c,i)=>i);
-  const cards=dkT.map(i=>({c:CARDS[state.round-1][i],i})).filter(x=>x.c&&x.c.pub);let ti=0;
+  const cards=dkT.map(i=>({c:cardOf(state.round,i),i})).filter(x=>x.c&&x.c.pub);let ti=0;
   function cycle(){
     const box=document.getElementById('cycleTick');if(!box)return;
     const {c,i}=cards[ti%cards.length];
@@ -484,7 +488,7 @@ function renderResult(){
     if(el)el.textContent=target===0?'적중자 없음':`배당 ${cur.toFixed(2)}배 확정`;},40);
   // 진위 공개
   const chips=Object.keys(res.truths||{}).map(i=>{
-    const c=CARDS[state.round-1][i];
+    const c=cardOf(state.round,i);if(!c)return '';
     const label=`${c.pub?'':'🛒 '}${tgOfCur(i)} ${c.stat} ${c.d>0?'+':''}${c.d} (${MEDIA[c.m].name})`;
     return `<span class="tchip ${res.truths[i]?'t':'f'}">${res.truths[i]?'■ 사실':'□ 거짓'} — ${label}</span>`;
   }).join('');
