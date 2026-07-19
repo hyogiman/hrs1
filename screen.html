@@ -69,6 +69,10 @@ h1.big span{color:var(--amber)}
 .lb-row .mn{font-family:'Chakra Petch',monospace;color:var(--amber)}
 .lb-row.top{background:var(--panel);border-radius:10px;border:1px solid var(--amber)}
 .hidden{display:none!important}
+.oddsreveal{animation:oddspop .55s cubic-bezier(.2,1.4,.4,1)}
+@keyframes oddspop{from{transform:scale(.55) translateY(24px);opacity:0}to{transform:scale(1) translateY(0);opacity:1}}
+@keyframes cntpulse{0%{transform:scale(1.6);opacity:0}25%{transform:scale(1);opacity:1}85%{opacity:1}100%{opacity:.2}}
+.precnt{animation:cntpulse .9s ease}
 </style>
 </head>
 <body>
@@ -328,6 +332,43 @@ function renderRace(){
   const res=results[state.round];
   if(!res){C.innerHTML='<p class="subbig" style="font-size:26px">🏇 경주 준비 중…</p>';
     setTimeout(renderRace,500);return;}
+  // 새로고침 등으로 늦게 합류하면 프리롤 생략
+  if(res.t&&Date.now()-res.t>12000){renderRaceRun();return;}
+  const f=res.field;
+  const [d0]=SCHEDULE[state.round-1];
+  // 배당 높은 순(비인기)부터 공개, 본명(최저 배당)은 마지막 — 판돈 없는 말이 맨 앞
+  const revealOrder=[...f].sort((a,b)=>{
+    const oa=res.pool[a]?res.odds[a]:999,ob=res.pool[b]?res.odds[b]:999;
+    return ob-oa;});
+  C.innerHTML=`
+  <div class="condbar">ROUND ${state.round} — 베팅 마감 · 확정 배당 공개</div>
+  <div id="oddsStage" style="display:flex;flex-direction:column;gap:13px;align-items:center;margin-top:26px;min-height:340px"></div>
+  <div id="preCount" style="font-family:'Black Han Sans';font-size:150px;color:var(--amber);text-align:center;line-height:1;min-height:160px"></div>`;
+  const stage=document.getElementById('oddsStage');
+  revealOrder.forEach((h,k)=>{
+    setTimeout(()=>{
+      if(!state||state.phase!=='race'||!document.getElementById('oddsStage'))return;
+      const el=document.createElement('div');
+      el.className='oddsreveal';
+      el.style.cssText='display:flex;align-items:center;gap:18px;border:1.5px solid rgba(255,176,32,.5);border-radius:14px;padding:10px 26px;background:rgba(255,176,32,.06)';
+      el.innerHTML=`<span style="font-family:'Black Han Sans';font-size:34px;color:${HORSES[h].c}">🐎 ${disp(h)}</span>
+        <span style="font-family:'Chakra Petch',monospace;font-size:38px;color:var(--amber);font-weight:700">${res.pool[h]?(res.odds[h]||0).toFixed(2)+'배':'무배당'}</span>
+        <span style="font-size:16px;color:var(--muted)">판돈 ${res.pool[h]?fmt(res.pool[h])+'만':'—'}</span>`;
+      stage.appendChild(el);
+    },k*1100);
+  });
+  const cntAt=revealOrder.length*1100+500;
+  [3,2,1].forEach((n,k)=>{
+    setTimeout(()=>{
+      if(!state||state.phase!=='race')return;
+      const pc=document.getElementById('preCount');
+      if(pc)pc.innerHTML=`<span class="precnt" style="display:inline-block">${n}</span>`;
+    },cntAt+k*900);
+  });
+  setTimeout(()=>{if(state&&state.phase==='race')renderRaceRun();},cntAt+2850);
+}
+function renderRaceRun(){
+  const res=results[state.round];if(!res)return;
   const f=res.field,order=res.order;
   const lapsPre={'단':1,'중':2,'장':3}[SCHEDULE[state.round-1][0]];
   const finRight=lapsPre%2===1;
@@ -401,7 +442,10 @@ function renderRace(){
         if(em)em.style.transform=p.right?'scaleX(-1)':'scaleX(1)';}
     });
     const li=document.getElementById('lapInd');
-    if(li)li.textContent=LAPS>1?`LAP ${leadLap+1}/${LAPS}`:'';
+    if(li){
+      if(LAPS>1&&leadLap+1>=LAPS){li.innerHTML='🏁 <b style="color:var(--down)">마지막 랩!</b> '+`LAP ${LAPS}/${LAPS}`;}
+      else li.textContent=LAPS>1?`LAP ${leadLap+1}/${LAPS}`:'';
+    }
     if(t<totalDur)requestAnimationFrame(frame);
     else{const msg=document.getElementById('raceMsg');
       if(msg)msg.innerHTML=`🏆 <b style="color:${HORSES[res.winner].c};font-size:26px">${disp(res.winner)}</b> 우승!`;}
@@ -412,17 +456,27 @@ function renderResult(){
   const res=results[state.round];if(!res)return;
   const f=res.field,total=res.total||1;
   const maxPool=Math.max(...f.map(h=>res.pool[h]||0),1);
+  const ord=res.order?Object.values(res.order):f;
   C.innerHTML=`<div class="winbanner"><span class="w" style="color:${HORSES[res.winner].c}">${disp(res.winner)}</span>
     <span class="w"> 우승</span><div class="o" id="oddsNum">배당 0.00배</div></div>
-  <div class="oddsboard">${f.map(h=>`
-    <div class="orow"><span class="nm" style="color:${HORSES[h].c}">${disp(h)}${h===res.winner?' 🏆':''}</span>
+  <div class="oddsboard">${ord.map((h,k)=>`
+    <div class="orow" id="row-${h}" style="opacity:0">
+    <span class="nm"><b style="color:var(--amber);font-family:'Chakra Petch',monospace">${k+1}위</b>
+    <span style="color:${HORSES[h].c}"> ${disp(h)}${h===res.winner?' 🏆':''}</span>
+    <span style="font-size:14px;color:var(--muted)"> ${res.scores[h]}점</span></span>
     <div class="bar"><i id="bar-${h}" style="width:0;background:${HORSES[h].c}"></i></div>
     <span class="od">${res.pool[h]?fmt(res.pool[h])+'만':'—'}</span></div>`).join('')}
   </div>
-  <div class="calc">최종 점수 — ${(res.order?Object.values(res.order):f).map(h=>`${disp(h)} ${res.scores[h]}점`).join(' · ')}</div>
   <div class="truths" id="truthChips"></div>`;
-  setTimeout(()=>{f.forEach(h=>{const b=document.getElementById('bar-'+h);
-    if(b)b.style.width=((res.pool[h]||0)/maxPool*100)+'%';});},300);
+  // 1위부터 5위까지 순차 등장
+  ord.forEach((h,k)=>{
+    setTimeout(()=>{
+      const row=document.getElementById('row-'+h);if(!row)return;
+      row.style.opacity=1;row.classList.add('oddsreveal');
+      setTimeout(()=>{const b=document.getElementById('bar-'+h);
+        if(b)b.style.width=((res.pool[h]||0)/maxPool*100)+'%';},350);
+    },400+k*700);
+  });
   // 배당 카운트업 (시그니처)
   const target=res.odds[res.winner]||0;let cur=0;
   const iv=setInterval(()=>{cur+=target/40;if(cur>=target){cur=target;clearInterval(iv);}
@@ -434,7 +488,7 @@ function renderResult(){
     const label=`${c.pub?'':'🛒 '}${tgOfCur(i)} ${c.stat} ${c.d>0?'+':''}${c.d} (${MEDIA[c.m].name})`;
     return `<span class="tchip ${res.truths[i]?'t':'f'}">${res.truths[i]?'■ 사실':'□ 거짓'} — ${label}</span>`;
   }).join('');
-  setTimeout(()=>{document.getElementById('truthChips').innerHTML=chips;},2500);
+  setTimeout(()=>{const tc=document.getElementById('truthChips');if(tc)tc.innerHTML=chips;},4600);
 }
 function renderFinal(){
   const all=Object.values(players).map(p=>({n:p.name,m:p.money})).sort((a,b)=>b.m-a.m);

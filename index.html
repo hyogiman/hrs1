@@ -476,7 +476,7 @@ function render(force){
   // 새 라운드 진입 시 베팅 상태 초기화(제출본이 있으면 그걸 로드)
   const roundKey=state.round+'_'+(state.seed||0);
   if(roundKey!==lastRound){lastRound=roundKey;selHorse=0;activeTab='race';
-    showVerifyPanel=false;showExpertPanel=false;
+    showVerifyPanel=false;showExpertPanel=false;hiddenOpen=false;resHiddenOpen=false;
     const b=myBets[state.round];alloc=b?{...b.stakes}:{};}
   lastPhase=key;
   if(p==='lobby')show('lobby');
@@ -576,14 +576,22 @@ function renderNewsTab(c){
   const r=state.round,cards=CARDS[r-1];const owned=myOwned[r]||{};
   let html='<div class="card" style="padding:11px 14px"><h3 style="margin:0">오늘의 소식</h3></div>';
   deckIdx().forEach(i=>{const cd=cards[i];if(cd&&cd.pub)html+=cardHTML(cd,i);});
-  const oh=Object.keys(owned).map(i=>cardHTML(cards[i],+i,{hidden:true})).join('');
-  if(oh)html+=`<div class="card" style="padding:11px 14px"><h3 style="margin:0">내가 확보한 히든 정보</h3></div>${oh}`;
+  const ohArr=Object.keys(owned);
+  if(ohArr.length){
+    html+=`<div class="card" style="padding:11px 14px;cursor:pointer;user-select:none" onclick="toggleHiddenSec()">
+      <h3 style="margin:0">🛒 내가 확보한 상점 정보 (${ohArr.length}건)
+      <span style="float:right;color:var(--amber);font-size:13px">${hiddenOpen?'▲ 접기':'▼ 펼치기'}</span></h3>
+      ${hiddenOpen?'':'<div style="font-size:11.5px;color:var(--muted);margin-top:4px">내용은 접혀 있습니다 — 눌러서 확인하세요</div>'}</div>`;
+    if(hiddenOpen)html+=ohArr.map(i=>cardHTML(cards[i],+i,{hidden:true})).join('');
+  }
   else html+=`<div class="notice">숨은 소식 3건은 상점에서 구매할 수 있습니다.</div>`;
   c.innerHTML=html;
 }
 
 /* ── 상점 ── */
-let showVerifyPanel=false,showExpertPanel=false;
+let showVerifyPanel=false,showExpertPanel=false,hiddenOpen=false,resHiddenOpen=false;
+function toggleHiddenSec(){hiddenOpen=!hiddenOpen;renderTab();}
+function toggleResHidden(){resHiddenOpen=!resHiddenOpen;render(true);}
 async function renderConsultInto(){
   const s=await db.ref(`${ROOT}/consult/${uid}`).get();const c=s.val();
   const box=$('consultBox');
@@ -770,8 +778,17 @@ function renderResult(){
   }
   $('myPayout').innerHTML=html;
   let tf='';const dkR=res.deck?Object.values(res.deck).map(Number):CARDS[r-1].map((c,i)=>i);
+  const hidRes=[];
   dkR.forEach(i=>{const c=CARDS[r-1][i];if(!c||c.noeff)return;
-    tf+=cardHTML(c,i,{truth:!!(res.truths&&res.truths[i]),hidden:!c.pub});});
+    if(c.pub)tf+=cardHTML(c,i,{truth:!!(res.truths&&res.truths[i])});
+    else hidRes.push(i);});
+  if(hidRes.length){
+    tf+=`<div class="card" style="padding:10px 14px;cursor:pointer;user-select:none;margin-top:6px" onclick="toggleResHidden()">
+      <h3 style="margin:0;font-size:14px">🛒 상점 판매 정보 (${hidRes.length}건)
+      <span style="float:right;color:var(--amber);font-size:12px">${resHiddenOpen?'▲ 접기':'▼ 펼치기'}</span></h3></div>`;
+    if(resHiddenOpen)hidRes.forEach(i=>{const c=CARDS[r-1][i];
+      tf+=cardHTML(c,i,{truth:!!(res.truths&&res.truths[i]),hidden:true});});
+  }
   $('truthFeed').innerHTML=tf;
 }
 

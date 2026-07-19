@@ -633,7 +633,7 @@ function autoTick(){
     runRace();
   }else if(state.phase==='race'){
     if(!raceAt)raceAt=Date.now(); // 새로고침 등으로 시작 시각을 모르면 지금부터 다시 대기
-    const dur={'단':13,'중':20,'장':27}[SCHEDULE[state.round-1][0]]+7; // 연출+우승 배너 여유
+    const dur={'단':13,'중':20,'장':27}[SCHEDULE[state.round-1][0]]+16; // 배당 공개 프리롤(~9초)+연출+우승 배너 여유
     const s=Math.ceil((raceAt+(dur+10)*1000-Date.now())/1000);
     if(s>0){msg.textContent=`자동: ${s}초 후 정산 공개`;return;}
     if(autoDoneKey===key)return;
