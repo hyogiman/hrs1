@@ -416,9 +416,11 @@ function listen(){
   db.ref(`${ROOT}/results`).on('value',s=>{results=s.val()||{};
     if(state&&state.phase==='race')renderRaceInfo();
     if(state&&(state.phase==='result'||state.phase==='final'))render(true);});
-  db.ref(`${ROOT}/bets`).on('value',s=>{const b=s.val()||{};myBets={};
-    Object.keys(b).forEach(r=>{if(b[r][uid])myBets[r]=b[r][uid];});
-    updateBetDot();});
+  db.ref(`${ROOT}/bets`).on('value',s=>{const b=s.val()||{};myBets={};allBets=b;
+    Object.keys(b).forEach(r=>{if(b[r]&&b[r][uid])myBets[r]=b[r][uid];});
+    updateBetDot();renderLiveOdds();});
+  db.ref(`${ROOT}/config/liveOdds`).on('value',s=>{LIVE_ODDS=s.val()===true;
+    if(activeTab==='bet')renderTab();else renderLiveOdds();});
   db.ref(`${ROOT}/owned/${uid}`).on('value',s=>{myOwned=s.val()||{};
     if(activeTab==='news'||activeTab==='shop')renderTab();});
   db.ref(`${ROOT}/verified/${uid}`).on('value',s=>{myVerified=s.val()||{};
@@ -612,6 +614,29 @@ function renderNewsTab(c){
 
 /* ── 상점 ── */
 let showVerifyPanel=false,showExpertPanel=false,hiddenOpen=false,resHiddenOpen=false;
+let allBets={},LIVE_ODDS=false;
+/* 실시간 배당판 — 베팅 입력을 건드리지 않도록 이 영역만 따로 갱신 */
+function renderLiveOdds(){
+  const box=$('liveOddsBox');if(!box)return;
+  if(!LIVE_ODDS||!state||state.phase!=='open'){box.innerHTML='';return;}
+  const r=state.round,rb=allBets[r]||{},f=field();
+  const pool={};let tot=0;
+  f.forEach(h=>pool[h]=0);
+  Object.values(rb).forEach(b=>Object.keys(b.stakes||{}).forEach(h=>{
+    if(pool[h]!==undefined){pool[h]+=b.stakes[h];tot+=b.stakes[h];}}));
+  const mine=(myBets[r]||{}).stakes||{};
+  box.innerHTML=`<div class="card"><h3>실시간 배당판 <span style="color:var(--muted);font-size:11px;font-weight:400">마감 시점에 확정됩니다</span></h3>
+    <table class="paytable"><tr><th style="text-align:left">말</th><th style="text-align:right">판돈</th>
+      <th style="text-align:right">비중</th><th style="text-align:right">현재 배당</th></tr>
+    ${f.map(h=>{const p=pool[h]||0;
+      return `<tr style="${mine[h]?'background:rgba(255,176,32,.08)':''}">
+        <td style="color:${HORSES[h].c}">${disp(h)}${mine[h]?' <b style="color:var(--amber)">✓</b>':''}</td>
+        <td class="num">${p?fmt(p)+'만':'—'}</td>
+        <td class="num">${tot&&p?Math.round(p/tot*100)+'%':'—'}</td>
+        <td class="num">${p?fmt(Math.min(tot/p,15))+'배':'—'}</td></tr>`;}).join('')}
+    </table>
+    <p style="font-size:11.5px;color:var(--muted);margin-top:7px">총 판돈 ${fmt(tot)}만 · 판돈이 몰릴수록 배당은 낮아집니다.</p></div>`;
+}
 function toggleHiddenSec(){hiddenOpen=!hiddenOpen;renderTab();}
 function toggleResHidden(){resHiddenOpen=!resHiddenOpen;render(true);}
 async function renderConsultInto(){
@@ -737,8 +762,9 @@ function renderBetTab(c){
        oninput="alloc[this.dataset.h]=+this.value||0;updateCapDisplay()"><span style="font-size:12px;color:var(--muted)">만</span></div>`).join('')}
     <div class="betsum"><span>합계 / 한도</span><span><b id="betTotal">0</b> / <span id="betCap">0</span>만</span></div>
     <button class="primary" id="btnBet" onclick="submitBet()">${b?'수정 재제출':'베팅 제출'}</button>
-  </div>`;
-  updateCapDisplay();
+  </div>
+  <div id="liveOddsBox"></div>`;
+  updateCapDisplay();renderLiveOdds();
 }
 function updateCapDisplay(){
   const t=$('betTotal'),cp=$('betCap');if(!t||!cp||!me||!state)return;
