@@ -3,7 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <title>더 레이스 — 스크린</title>
-<link href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=Chakra+Petch:wght@600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css">
 <style>
 :root{--track:#10231C;--board:#0B1512;--panel:#163026;--line:#24443A;--amber:#FFB020;--chalk:#F2EFE6;--muted:#9DB4AA;--up:#5BC77E;--down:#E06A5A}
@@ -11,34 +12,34 @@
 body{background:var(--track);color:var(--chalk);font-family:'Pretendard',sans-serif;overflow:hidden;height:100vh}
 .stage{height:100vh;display:flex;flex-direction:column;padding:24px 40px}
 .top{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:14px}
-.logo{font-family:'Black Han Sans';font-size:30px}.logo span{color:var(--amber)}
-.rphase{font-family:'Chakra Petch',monospace;font-size:20px;color:var(--amber)}
+.logo{font-family:'Pretendard',sans-serif;font-weight:900;font-size:30px}.logo span{color:var(--amber)}
+.rphase{font-family:'Chakra Petch','Pretendard',monospace;font-size:20px;color:var(--amber)}
 .center{flex:1;display:flex;flex-direction:column;justify-content:center;
   padding-bottom:var(--topcomp,52px)} /* 상단 헤더 높이만큼 보정 — 화면 정중앙 정렬 */
-h1.big{font-family:'Black Han Sans';font-size:64px;text-align:center}
+h1.big{font-family:'Pretendard',sans-serif;font-weight:900;font-size:64px;text-align:center}
 h1.big span{color:var(--amber)}
 .subbig{text-align:center;color:var(--muted);font-size:20px;margin-top:12px}
 /* 출마표 */
 .hgrid{display:grid;grid-template-columns:repeat(5,1fr);gap:16px}
 .hcard{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px;text-align:center}
-.hcard .nm{font-family:'Black Han Sans';font-size:26px;margin:6px 0 2px}
+.hcard .nm{font-family:'Pretendard',sans-serif;font-weight:900;font-size:26px;margin:6px 0 2px}
 .hcard .tag{font-size:13px;color:var(--muted);min-height:34px}
 .hcard .cond{font-size:14px}
 .cond.dn{color:var(--down)}
 .condbar{background:var(--board);border:1px solid var(--amber);border-radius:12px;text-align:center;
-  padding:14px;font-family:'Black Han Sans';font-size:26px;color:var(--amber);margin-bottom:18px}
+  padding:14px;font-family:'Pretendard',sans-serif;font-weight:900;font-size:26px;color:var(--amber);margin-bottom:18px}
 /* 티커 */
 .ticker{max-width:900px;margin:0 auto;width:100%}
 .tick{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:18px 22px;margin:12px 0;
   opacity:0;transform:translateY(16px);transition:.5s}
 .tick.on{opacity:1;transform:none}
 .tick .src{display:flex;justify-content:space-between;margin-bottom:8px;font-size:15px}
-.tick .src .rel{font-family:'Chakra Petch',monospace;color:var(--amber)}
+.tick .src .rel{font-family:'Chakra Petch','Pretendard',monospace;color:var(--amber)}
 .tick .body{font-size:20px;line-height:1.5}
 .tick .eff{font-size:15px;color:var(--muted);margin-top:8px}
 .tick .eff b.up{color:var(--up)}.tick .eff b.dn{color:var(--down)}
 /* 카운트다운 */
-.clock{font-family:'Chakra Petch',monospace;font-size:170px;text-align:center;color:var(--amber);
+.clock{font-family:'Chakra Petch','Pretendard',monospace;font-size:170px;text-align:center;color:var(--amber);
   text-shadow:0 0 40px rgba(255,176,32,.45)}
 /* 레이스 */
 .trackbox{background:var(--board);border:2px solid var(--line);border-radius:16px;padding:min(26px,3vh) 0;position:relative}
@@ -46,28 +47,28 @@ h1.big span{color:var(--amber)}
 .lane:last-child{border:none}
 .runner{position:absolute;left:1%;display:flex;align-items:center;gap:8px;transition:none;will-change:left}
 .runner .em{font-size:40px;transform:scaleX(-1)}
-.runner .lb{font-family:'Black Han Sans';font-size:16px}
+.runner .lb{font-family:'Pretendard',sans-serif;font-weight:900;font-size:16px}
 .finishline{position:absolute;right:6%;top:0;bottom:0;width:4px;
   background:repeating-linear-gradient(0deg,var(--chalk) 0 8px,var(--board) 8px 16px)}
 /* 정산 보드 */
 .oddsboard{max-width:820px;margin:0 auto;width:100%}
 .orow{display:flex;align-items:center;gap:16px;padding:12px 8px;border-bottom:1px solid var(--line)}
-.orow .nm{width:110px;font-family:'Black Han Sans';font-size:24px}
+.orow .nm{width:110px;font-family:'Pretendard',sans-serif;font-weight:900;font-size:24px}
 .orow .bar{flex:1;height:20px;background:var(--board);border-radius:10px;overflow:hidden}
 .orow .bar i{display:block;height:100%;border-radius:10px;transition:width 1s}
-.orow .od{width:130px;text-align:right;font-family:'Chakra Petch',monospace;font-size:26px;color:var(--amber)}
+.orow .od{width:130px;text-align:right;font-family:'Chakra Petch','Pretendard',monospace;font-size:26px;color:var(--amber)}
 .winbanner{text-align:center;margin:10px 0 22px}
-.winbanner .w{font-family:'Black Han Sans';font-size:52px}
-.winbanner .o{font-family:'Chakra Petch',monospace;font-size:34px;color:var(--amber);text-shadow:0 0 24px rgba(255,176,32,.5)}
-.calc{font-size:14px;color:var(--muted);text-align:center;margin-top:14px;font-family:'Chakra Petch',monospace}
+.winbanner .w{font-family:'Pretendard',sans-serif;font-weight:900;font-size:52px}
+.winbanner .o{font-family:'Chakra Petch','Pretendard',monospace;font-size:34px;color:var(--amber);text-shadow:0 0 24px rgba(255,176,32,.5)}
+.calc{font-size:14px;color:var(--muted);text-align:center;margin-top:14px;font-family:'Chakra Petch','Pretendard',monospace}
 .truths{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-top:16px}
 .tchip{font-size:14px;padding:6px 12px;border-radius:20px;border:1px solid var(--line);background:var(--panel)}
 .tchip.t{border-color:var(--up);color:var(--up)}.tchip.f{border-color:var(--down);color:var(--down);opacity:.7}
 /* 리더보드 */
 .lb-table{max-width:640px;margin:0 auto;width:100%;font-size:22px}
 .lb-row{display:flex;justify-content:space-between;padding:12px 18px;border-bottom:1px solid var(--line)}
-.lb-row .rk{width:60px;font-family:'Chakra Petch',monospace;color:var(--amber)}
-.lb-row .mn{font-family:'Chakra Petch',monospace;color:var(--amber)}
+.lb-row .rk{width:60px;font-family:'Chakra Petch','Pretendard',monospace;color:var(--amber)}
+.lb-row .mn{font-family:'Chakra Petch','Pretendard',monospace;color:var(--amber)}
 .lb-row.top{background:var(--panel);border-radius:10px;border:1px solid var(--amber)}
 .hidden{display:none!important}
 .oddsreveal{animation:oddspop .55s cubic-bezier(.2,1.4,.4,1)}
@@ -78,7 +79,10 @@ h1.big span{color:var(--amber)}
 </head>
 <body>
 <div class="stage">
-  <div class="top"><div class="logo">THE <span>RACE</span></div><div class="rphase" id="rphase">—</div></div>
+  <div class="top"><div class="logo">THE <span>RACE</span> <small style="font-size:11px;color:var(--muted);font-weight:400">v0.6</small></div>
+  <div style="display:flex;align-items:center;gap:14px">
+    <button id="autoBtnS" onclick="toggleAutoS()" style="background:none;border:1px solid var(--line);border-radius:8px;padding:4px 12px;color:var(--muted);cursor:pointer;font-size:12px;font-family:'Chakra Petch','Pretendard',monospace">AUTO OFF</button>
+    <div class="rphase" id="rphase">—</div></div></div>
   <div class="center" id="center"></div>
 </div>
 
@@ -117,7 +121,189 @@ const HORSES={ // s:[스피드,스타트,뒷심,적응력,기수]
 const STATN2=['스피드','스타트','뒷심','적응력','기수'];
 const CUSTOM_BASE=100;
 let CUSTOM={};
-function cardOf(r,i){i=+i;return i>=CUSTOM_BASE?((CUSTOM[r]||{})[i]||null):CARDS[r-1][i];}
+function cardOf(r,i){i=+i;return i>=CUSTOM_BASE?((CUSTOM[r]||{})[i]||null):CARDS[EPX(r)][i];}
+/* ── 진위표: admin과 동일 알고리즘 (시드 결정론) ── */
+let truthCache=null,cachedSeedS=null;
+function genTruth(seed){
+  const rng=mulberry32(seed);
+  const byMedia={};
+  for(let ep=0;ep<10;ep++){
+    CARDS[ep].forEach((c,i)=>{
+      if(c.noeff)return;
+      (byMedia[c.m]=byMedia[c.m]||[]).push({r:ep,i});});
+  }
+  const truth={};
+  Object.keys(byMedia).forEach(m=>{
+    const list=byMedia[m];
+    const need=Math.round(list.length*MEDIA[m].rel);
+    for(let i=list.length-1;i>0;i--){const j=Math.floor(rng()*(i+1));[list[i],list[j]]=[list[j],list[i]];}
+    list.forEach((x,k)=>truth[`${x.r}_${x.i}`]=k<need);
+  });
+  return truth;
+}
+function truths(){
+  if(!state||state.seed===undefined)return null;
+  if(!truthCache||cachedSeedS!==state.seed){truthCache=genTruth(state.seed);cachedSeedS=state.seed;}
+  return truthCache;
+}
+function truthOf(r,i){i=+i;
+  if(i>=CUSTOM_BASE){const c=cardOf(r,i);return !!(c&&c.truth);}
+  const T=truths();return !!(T&&T[`${EPX(r)}_${i}`]);}
+/* ── 경주 엔진 (admin과 동일 — 자동모드가 admin 없이도 경주·정산을 실행하기 위한 이식) ── */
+const BASE_SCALE=44;
+const INFO_CAP=24;
+const DISTW={'단':[.35,.50,.15],'중':[.40,.30,.30],'장':[.35,.15,.50]};
+const TRACKC={'매우 단단함':0.08,'초원':0.20,'진흙탕':0.55,'설원':0.42};
+const ENVC={wS:0.22,wF:0.34,tJ:0.42,tS:0.16,gate:1.3,gateS:1.1,rain:0.06,snow:0.06};
+const CTR={ad:25,jk:27,st:31};
+function baseOnly(stArr,round){
+  const S=SC(round),w=DISTW[S.d];
+  return (stArr[0]*w[0]+stArr[1]*w[1]+stArr[2]*w[2])/50*BASE_SCALE;
+}
+function envOnly(stArr,round,gate,fatigue,isFat){
+  const S=SC(round);let e=0;
+  e+=(stArr[3]-CTR.ad)*TRACKC[S.track];
+  if(S.wind==='순풍')e+=(stArr[0]-38)*ENVC.wS;
+  if(S.wind==='역풍')e+=(stArr[2]-33)*ENVC.wF;
+  if(S.temp==='혹서')e+=(stArr[4]-CTR.jk)*ENVC.tJ;
+  if(S.temp==='혹한')e+=(stArr[1]-CTR.st)*ENVC.tS;
+  if(S.wx==='비')e+=(stArr[1]-CTR.st)*ENVC.rain;
+  if(S.wx==='눈')e+=(stArr[4]-CTR.jk)*ENVC.snow;
+  e+=(3-gate)*ENVC.gate+((stArr[1]-33)/50)*(gate-3)*ENVC.gateS;
+  if(isFat)e-=0.15*(60-stArr[4]);
+  return e;
+}
+function raceRng(seed,round,horse){
+  let h=seed+round*1000;for(const ch of horse)h+=ch.charCodeAt(0);
+  return mulberry32(h)()*5;
+}
+let SPECIAL={};
+db.ref(`${ROOT}/special`).on('value',s=>{SPECIAL=s.val()||{};});
+async function acquireRaceLock(r,who){
+  try{
+    const res=await db.ref(`${ROOT}/locks/race${r}`).transaction(cur=>cur===null?{by:who,t:Date.now()}:undefined);
+    return res.committed;
+  }catch(e){return false;}
+}
+async function runRaceS(){
+  const r=state.round;const field=Object.values(state.field);
+  const deck=Object.values(state.deck||{});
+  const rtg=state.cardTg||{};
+  const gates=state.gates||{};
+  const basePerm={},bases={},baseP={},envP={},statSnap={};
+  field.forEach(h=>{
+    const st=effStats2(h),g=gates[h]||3;
+    baseP[h]=fmt(baseOnly(st,r));
+    envP[h]=fmt(envOnly(st,r,g,state.fatigue,state.fatigue===h));
+    basePerm[h]=baseP[h]+envP[h];bases[h]=fmt(basePerm[h]);
+    statSnap[h]=st;});
+  const tempSt={},flat={};
+  field.forEach(h=>{tempSt[h]=effStats2(h);flat[h]=0;});
+  deck.forEach(ci=>{
+    const c=cardOf(r,ci);const tgt=rtg[ci];
+    if(!c||c.noeff||!tgt||!field.includes(tgt))return;
+    if(!truthOf(r,ci))return;
+    if(c.stat==='컨디션'){flat[tgt]+=c.d;return;}
+    const si=STATN2.indexOf(c.stat);
+    tempSt[tgt][si]=Math.max(5,Math.min(60,tempSt[tgt][si]+c.d));
+  });
+  const infos={},scores={};
+  field.forEach(h=>{
+    const g=gates[h]||3;
+    const withI=baseOnly(tempSt[h],r)+envOnly(tempSt[h],r,g,state.fatigue,state.fatigue===h);
+    const diff=withI-basePerm[h]+flat[h];
+    infos[h]=fmt(Math.max(-INFO_CAP,Math.min(INFO_CAP,diff)));
+    scores[h]=fmt(basePerm[h]+infos[h]+raceRng(state.seed,r,h));
+  });
+  const order=[...field].sort((a,b)=>scores[b]-scores[a]);
+  const winner=order[0];
+  let rb=BETS[r]||{};
+  try{const snap=await db.ref(`${ROOT}/bets/${r}`).get();if(snap.exists())rb=snap.val()||{};}catch(e){}
+  const pool={};let total=0;
+  field.forEach(h=>pool[h]=0);
+  Object.values(rb).forEach(b=>{Object.keys(b.stakes).forEach(h=>{pool[h]+=b.stakes[h];total+=b.stakes[h];});});
+  const odds={};let welfareExcess=0;
+  field.forEach(h=>{
+    if(pool[h]<=0){odds[h]=0;return;}
+    const raw=total/pool[h];odds[h]=fmt(Math.min(raw,15));
+    if(h===winner&&raw>15)welfareExcess=fmt((raw-15)*pool[h]);
+  });
+  const truthsOut={};deck.forEach(ci=>{const c=cardOf(r,ci);if(c&&!c.noeff)truthsOut[ci]=truthOf(r,ci);});
+  const sp=SPECIAL[r];
+  const spHorse=sp?order[sp.rank-1]:null;
+  let spPaid=0;
+  const moneyBefore={};Object.keys(players).forEach(id=>moneyBefore[id]=players[id].money);
+  const env=SC(r);
+  await db.ref(`${ROOT}/results/${r}`).set({field,deck,bases,infos,scores,order,winner,odds,pool,total,
+    baseP,envP,gates,stats:statSnap,cardTg:rtg,
+    env:{d:env.d,wx:env.wx,temp:env.temp,track:env.track,wind:env.wind,name:env.name},
+    special:sp?{rank:sp.rank,mult:sp.mult,horse:spHorse}:null,
+    welfareExcess,truths:truthsOut,moneyBefore,t:Date.now()});
+  await db.ref(`${ROOT}/state/phase`).set('race');
+  const ups={};
+  for(const id of Object.keys(rb)){
+    const b=rb[id];let back=0;
+    if(b.stakes[winner])back+=b.stakes[winner]*(odds[winner]||0);
+    if(sp&&spHorse&&b.stakes[spHorse]){const bonus=fmt(b.stakes[spHorse]*sp.mult);back+=bonus;spPaid+=bonus;}
+    if(back>0)ups[`${id}/money`]=fmt(players[id].money+back);
+  }
+  if(Object.keys(ups).length)await db.ref(`${ROOT}/players`).update(ups);
+  console.log(`[AUTO] R${r} 경주 실행 — 우승 ${winner}, 배당 ${odds[winner]||0}배`);
+  setTimeout(async()=>{
+    const snap=(await db.ref(`${ROOT}/players`).get()).val()||{};
+    for(const id of Object.keys(snap)){
+      const p=snap[id];
+      if(p.money<1&&!p.welfareUsed){
+        await db.ref(`${ROOT}/players/${id}`).update({money:10,welfareUsed:true});
+        await db.ref(`${ROOT}/log/welfare/${r}/${id}`).set(true);
+      }
+    }
+  },500);
+}
+/* ── 자동모드 (admin과 스위치 공유 — 락으로 이중 실행 방지) ── */
+let AUTO=false,autoStageS='',autoMarkS=0,autoDoneKeyS='',raceAtS=0,lastPhaseS='';
+db.ref(`${ROOT}/config/auto`).on('value',s=>{AUTO=!!s.val();
+  const b=document.getElementById('autoBtnS');
+  if(b){b.textContent=AUTO?'AUTO ON':'AUTO OFF';
+    b.style.color=AUTO?'var(--amber)':'var(--muted)';
+    b.style.borderColor=AUTO?'var(--amber)':'var(--line)';}});
+function toggleAutoS(){db.ref(`${ROOT}/config/auto`).set(!AUTO).catch(()=>{});}
+setInterval(autoTickS,400);
+async function autoTickS(){
+  if(!state||!state.round)return;
+  if(state.phase!==lastPhaseS){lastPhaseS=state.phase;if(state.phase==='race')raceAtS=Date.now();else if(state.phase!=='race')raceAtS=0;}
+  if(!AUTO)return;
+  const key=state.round+'-'+state.phase;
+  if(state.phase==='open'){
+    if(!state.deadline||Date.now()<=state.deadline){autoStageS='';return;}
+    if(autoDoneKeyS===key)return;
+    if(autoStageS!=='cd'){autoStageS='cd';autoMarkS=Date.now()+3000;}
+    if(Date.now()<autoMarkS)return;
+    autoDoneKeyS=key;autoStageS='';
+    if(await acquireRaceLock(state.round,'screen'))await runRaceS();
+  }else if(state.phase==='race'){
+    if(!raceAtS)raceAtS=Date.now();
+    const dur={'단':13,'중':20,'장':27}[SC(state.round).d]+16;
+    if(Date.now()<raceAtS+(dur+3)*1000)return;
+    if(autoDoneKeyS===key)return;autoDoneKeyS=key;
+    db.ref(`${ROOT}/state/phase`).set('result');
+  }
+}
+/* ── 판별 요청 스위프: SCREEN이 상시 응답 (admin과 동시 실행 시 트랜잭션으로 중복 방지) ── */
+let VREQ={},vInFlight=new Set();
+function sweepVerify(){
+  if(!state||state.seed===undefined)return;
+  Object.keys(VREQ).forEach(u=>{const rounds=VREQ[u]||{};
+    Object.keys(rounds).forEach(r=>{
+      const v=rounds[r];
+      if(!v||v.idx===undefined||v.answer!==undefined)return;
+      const key=u+':'+r;if(vInFlight.has(key))return;vInFlight.add(key);
+      let ans;
+      try{ans=truthOf(+r,v.idx);}catch(e){vInFlight.delete(key);return;}
+      db.ref(`${ROOT}/verified/${u}/${r}/answer`).transaction(cur=>cur===null?ans:undefined)
+        .catch(()=>{}).finally(()=>vInFlight.delete(key));
+    });});
+}
 function effStats2(h){const st=[...HORSES[h].s];const mods=(state&&state.statMods||{})[h]||{};
   STATN2.forEach((n,i)=>{if(mods[n])st[i]=Math.max(5,Math.min(60,st[i]+mods[n]));});return st;}
 const SCHEDULE=[
@@ -294,6 +480,8 @@ function updateLiveTotal(){
   el.textContent=Math.round(tot);
 }
 db.ref(`${ROOT}/custom`).on('value',s=>{CUSTOM=s.val()||{};});
+db.ref(`${ROOT}/verified`).on('value',s=>{VREQ=s.val()||{};sweepVerify();});
+setInterval(sweepVerify,2000);
 db.ref(`${ROOT}/results`).on('value',s=>{results=s.val()||{};
   if(state&&(state.phase==='race'||state.phase==='result'))render(true);});
 db.ref(`${ROOT}/names`).on('value',s=>{NAMES=s.val()||{};render(true);});
@@ -339,10 +527,10 @@ function renderOpen(){
   C.innerHTML=`${rankHtml}
   <div class="condbar">ROUND ${state.round} <b style="color:var(--amber)">${S.name}</b> — ${S.d==='단'?'단거리 1200m':S.d==='중'?'중거리 1800m':'장거리 2400m'} · ${WXICON[S.wx]} ${S.wx} · ${S.temp} · 트랙 ${S.track} · ${S.wind}${state.special?` · <b style="color:var(--up)">★ 스페셜 ${state.special.rank}위 ×${state.special.mult}배</b>`:''}</div>
   <div style="margin:6px 0 2px;font-size:min(19px,2.3vh);color:var(--muted)">실시간 판돈
-    <b id="liveTotal" style="color:var(--amber);font-family:'Chakra Petch',monospace;font-size:min(30px,3.6vh)">0</b>
+    <b id="liveTotal" style="color:var(--amber);font-family:'Chakra Petch','Pretendard',monospace;font-size:min(30px,3.6vh)">0</b>
     <span style="color:var(--amber)">만원</span></div>
   <div style="display:flex;justify-content:center;gap:22px;margin:6px 0 14px">
-    ${field().map(h=>`<span style="font-family:'Black Han Sans';font-size:22px;color:${HORSES[h].c}">🐎 ${disp(h)}${state.fatigue===h?' ▼':''}</span>`).join('')}
+    ${field().map(h=>`<span style="font-family:'Pretendard',sans-serif;font-weight:900;font-size:22px;color:${HORSES[h].c}">🐎 ${disp(h)}${state.fatigue===h?' ▼':''}</span>`).join('')}
   </div>
   <p class="subbig" style="margin:0" id="clockLabel">마감까지</p>
   <div class="clock" id="bigClock" style="font-size:120px">--:--</div>
@@ -366,6 +554,9 @@ function renderOpen(){
   const cards=dkT.map(i=>({c:cardOf(state.round,i),i})).filter(x=>x.c&&x.c.pub);let ti=0;
   function cycle(){
     const box=document.getElementById('cycleTick');if(!box)return;
+    if(!cards.length){ // v0.5: 기본 소식 전량 비공개 — 공개(커스텀) 소식이 없으면 안내만
+      box.innerHTML=`<div class="tick on"><div class="body" style="color:var(--muted)">이번 경주 정보 ${state.deck?Object.keys(state.deck).length:0}건은 전부 비공개 — 휴대폰 [상점]에서 구매하세요</div></div>`;
+      return;}
     const {c,i}=cards[ti%cards.length];
     box.innerHTML=`<div class="tick on"><div class="src"><span>${MEDIA[c.m].name}</span>
       <span class="rel">신뢰도 ${Math.round(MEDIA[c.m].rel*100)}%</span></div>
@@ -390,7 +581,7 @@ function renderRace(){
   C.innerHTML=`
   <div class="condbar">ROUND ${state.round} — 베팅 마감 · 확정 배당 공개</div>
   <div id="oddsStage" style="display:flex;flex-direction:column;gap:min(13px,1.4vh);align-items:center;justify-content:center;margin-top:min(20px,2.4vh);min-height:min(340px,38vh)"></div>
-  <div id="preCount" style="font-family:'Black Han Sans';font-size:min(150px,17vh);color:var(--amber);text-align:center;line-height:1;min-height:min(160px,19vh)"></div>`;
+  <div id="preCount" style="font-family:'Pretendard',sans-serif;font-weight:900;font-size:min(150px,17vh);color:var(--amber);text-align:center;line-height:1;min-height:min(160px,19vh)"></div>`;
   const stage=document.getElementById('oddsStage');
   revealOrder.forEach((h,k)=>{
     setTimeout(()=>{
@@ -398,8 +589,8 @@ function renderRace(){
       const el=document.createElement('div');
       el.className='oddsreveal';
       el.style.cssText='display:flex;align-items:center;gap:18px;border:1.5px solid rgba(255,176,32,.5);border-radius:14px;padding:min(10px,1.2vh) 26px;background:rgba(255,176,32,.06)';
-      el.innerHTML=`<span style="font-family:'Black Han Sans';font-size:min(34px,3.9vh);color:${HORSES[h].c}">🐎 ${disp(h)}</span>
-        <span style="font-family:'Chakra Petch',monospace;font-size:min(38px,4.3vh);color:var(--amber);font-weight:700">${res.pool[h]?(res.odds[h]||0).toFixed(2)+'배':'무배당'}</span>
+      el.innerHTML=`<span style="font-family:'Pretendard',sans-serif;font-weight:900;font-size:min(34px,3.9vh);color:${HORSES[h].c}">🐎 ${disp(h)}</span>
+        <span style="font-family:'Chakra Petch','Pretendard',monospace;font-size:min(38px,4.3vh);color:var(--amber);font-weight:700">${res.pool[h]?(res.odds[h]||0).toFixed(2)+'배':'무배당'}</span>
         <span style="font-size:min(16px,2vh);color:var(--muted)">판돈 ${res.pool[h]?fmt(res.pool[h])+'만':'—'}</span>`;
       stage.appendChild(el);
     },k*1100);
@@ -421,12 +612,12 @@ function renderRaceRun(){
   const finRight=lapsPre%2===1;
   C.innerHTML=`<div class="trackbox">
     <div class="finishline" style="${finRight?'right:6%;left:auto':'left:6%;right:auto'}"></div>
-    <div id="lapInd" style="position:absolute;top:8px;right:16px;font-family:'Chakra Petch',monospace;color:var(--amber);font-size:20px"></div>
-    <div id="segInd" style="position:absolute;top:8px;left:16px;font-family:'Chakra Petch',monospace;color:var(--amber);font-size:18px"></div>
+    <div id="lapInd" style="position:absolute;top:8px;right:16px;font-family:'Chakra Petch','Pretendard',monospace;color:var(--amber);font-size:20px"></div>
+
     ${f.map(h=>`<div class="lane"><div class="runner" id="rn-${h}">
       <span class="lb" style="color:${HORSES[h].c}">${disp(h)}</span><span class="em">🐎</span></div></div>`).join('')}
   </div>
-  <div style="display:flex;flex-wrap:wrap;gap:10px;justify-content:center;margin-top:12px;font-family:'Chakra Petch',monospace;font-size:17px">
+  <div style="display:flex;flex-wrap:wrap;gap:10px;justify-content:center;margin-top:12px;font-family:'Chakra Petch','Pretendard',monospace;font-size:17px">
     ${f.map(h=>`<span style="border:1px solid rgba(255,176,32,.4);border-radius:8px;padding:4px 12px;color:${HORSES[h].c}">${disp(h)} <b style="color:var(--amber)">${res.pool[h]?(res.odds[h]||0).toFixed(2)+'배':'—'}</b></span>`).join('')}
   </div>
   <p class="subbig" id="raceMsg" style="margin-top:12px">출발 준비…</p>`;
@@ -501,12 +692,6 @@ function renderRaceRun(){
         const em=el.querySelector('.em');
         if(em)em.style.transform=p.right?'scaleX(-1)':'scaleX(1)';}
     });
-    const si=document.getElementById('segInd');
-    if(si){
-      const lead=Math.max(...f.map(h=>Math.min(1,t/T[h])));
-      const seg=Math.min(5,Math.floor(lead*5)+1);
-      si.innerHTML=seg>=5?'<b style="color:var(--down)">FINAL</b>':`${seg} / 5 구간`;
-    }
     const li=document.getElementById('lapInd');
     if(li){
       if(LAPS>1&&leadLap+1>=LAPS){li.innerHTML='🏁 <b style="color:var(--down)">마지막 랩!</b> '+`LAP ${LAPS}/${LAPS}`;}
@@ -531,7 +716,7 @@ function renderResult(){
   C.innerHTML=`<div class="winbanner"><span class="w" style="color:${HORSES[res.winner].c}">${disp(res.winner)}</span>
     <span class="w"> 우승</span><div class="o" id="oddsNum">배당 0.00배</div></div>
   <div style="font-size:min(20px,2.4vh);color:var(--muted);margin:min(4px,0.5vh) 0 min(10px,1.2vh)">
-    이번 경주 총 판돈 <b style="color:var(--amber);font-family:'Chakra Petch',monospace">${fmt(total)}</b>만원</div>
+    이번 경주 총 판돈 <b style="color:var(--amber);font-family:'Chakra Petch','Pretendard',monospace">${fmt(total)}</b>만원</div>
   <table style="width:min(1150px,94%);margin:0 auto;border-collapse:collapse;font-size:min(21px,2.5vh)">
     <tr style="color:var(--muted);font-size:min(15px,1.9vh)">
       <th style="text-align:left;padding:4px 8px">순위</th><th style="text-align:left">말</th>
@@ -542,8 +727,8 @@ function renderResult(){
       const bp=(res.baseP||{})[h],ep=(res.envP||{})[h],inf=(res.infos||{})[h],sc=res.scores[h];
       const luck=(bp!==undefined&&ep!==undefined&&inf!==undefined)?Math.round((sc-bp-ep-inf)*100)/100:undefined;
       return `<tr id="row-${h}" style="opacity:0;border-top:1px solid var(--line);${h===res.winner?'background:rgba(255,176,32,.10)':''}">
-      <td style="padding:min(9px,1.1vh) 8px;font-family:'Chakra Petch',monospace;color:var(--amber)">${k+1}${h===res.winner?' 🏆':''}${sp&&h===sp.horse?' <span style="color:var(--up)">★</span>':''}</td>
-      <td style="color:${HORSES[h].c};font-family:'Black Han Sans'">${disp(h)}</td>
+      <td style="padding:min(9px,1.1vh) 8px;font-family:'Chakra Petch','Pretendard',monospace;color:var(--amber)">${k+1}${h===res.winner?' 🏆':''}${sp&&h===sp.horse?' <span style="color:var(--up)">★</span>':''}</td>
+      <td style="color:${HORSES[h].c};font-family:'Pretendard',sans-serif;font-weight:900">${disp(h)}</td>
       <td style="text-align:right">${bp!==undefined?fmt(bp):'—'}</td>
       <td style="text-align:right">${tri(ep)}</td>
       <td style="text-align:right">${tri(inf)}</td>
@@ -571,7 +756,7 @@ function renderResult(){
         .map(id=>(players[id]||{}).name||'?');
       spHtml=`<div style="font-size:min(24px,2.9vh);margin-top:min(12px,1.4vh);color:var(--up)">
         ★ 스페셜 ${sp.rank}위 <b style="color:${(HORSES[sp.horse]||{}).c||'#fff'}">${disp(sp.horse)}</b> ×${sp.mult}배 —
-        ${names.length?`<b>${names.join(' · ')}</b> 적중! 축하합니다 🎉`:'적중자 없음'}</div>`;
+        ${names.length?`<b>${names.length>5?names.slice(0,3).join(' · ')+' 외 '+(names.length-3)+'명':names.join(' · ')}</b> 적중! 축하합니다 🎉`:'적중자 없음'}</div>`;
     }
     tc.innerHTML=spHtml+`<div style="font-size:min(17px,2.1vh);color:var(--muted);margin-top:min(10px,1.2vh)">
       정보의 진위와 점수 내역은 <b style="color:var(--amber)">휴대폰 [결과] 화면</b>에서 확인하세요</div>`;},4600);

@@ -4,27 +4,28 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>더 레이스 — 관리자</title>
-<link href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=Chakra+Petch:wght@600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css">
 <style>
 :root{--track:#10231C;--board:#0B1512;--panel:#163026;--line:#24443A;--amber:#FFB020;--chalk:#F2EFE6;--muted:#9DB4AA;--up:#5BC77E;--down:#E06A5A}
 *{margin:0;padding:0;box-sizing:border-box}
 body{background:var(--track);color:var(--chalk);font-family:'Pretendard',sans-serif;padding-bottom:80px}
 .top{position:sticky;top:0;z-index:50;background:var(--board);border-bottom:2px solid var(--line);padding:12px 18px}
-.top .ttl{font-family:'Black Han Sans';font-size:20px}.top .ttl span{color:var(--amber)}
-.top .st{font-family:'Chakra Petch',monospace;font-size:14px;color:var(--amber);margin-top:4px}
+.top .ttl{font-family:'Pretendard',sans-serif;font-weight:900;font-size:20px}.top .ttl span{color:var(--amber)}
+.top .st{font-family:'Chakra Petch','Pretendard',monospace;font-size:14px;color:var(--amber);margin-top:4px}
 .top .conn{font-size:12px;color:var(--muted);margin-top:2px}
 .wrap{max-width:640px;margin:0 auto;padding:14px}
 .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px;margin-bottom:14px}
 h2{font-size:14px;color:var(--amber);margin-bottom:12px;letter-spacing:1px}
 button{padding:10px 14px;border:1px solid var(--line);border-radius:8px;background:var(--board);color:var(--chalk);cursor:pointer;font-size:14px;margin:3px 2px;font-family:inherit}
-button.go{width:100%;padding:16px;background:var(--amber);color:#1A1205;font-family:'Black Han Sans';font-size:19px;border:none;margin-top:6px}
+button.go{width:100%;padding:16px;background:var(--amber);color:#1A1205;font-family:'Pretendard',sans-serif;font-weight:900;font-size:19px;border:none;margin-top:6px}
 button.go:disabled{background:#8A6420;color:#3A2E10}
 button.danger{border-color:var(--down);color:var(--down)}
 input,select{padding:9px;border-radius:8px;border:1px solid var(--line);background:var(--board);color:var(--chalk);font-family:inherit;font-size:14px}
 table{width:100%;font-size:13px;border-collapse:collapse}
 td,th{padding:7px 4px;border-bottom:1px solid var(--line);text-align:left}
-td.num{font-family:'Chakra Petch',monospace;color:var(--amber);text-align:right}
+td.num{font-family:'Chakra Petch','Pretendard',monospace;color:var(--amber);text-align:right}
 .log{font-family:monospace;font-size:12px;color:var(--muted);max-height:260px;overflow:auto;line-height:1.6}
 .truth-t{color:var(--up)}.truth-f{color:var(--down)}
 .small{font-size:12px;color:var(--muted)}
@@ -34,7 +35,7 @@ td.num{font-family:'Chakra Petch',monospace;color:var(--amber);text-align:right}
 .tabbar button.on{color:var(--amber)}
 .sect{display:none}.sect.on{display:block}
 .hrow{display:flex;align-items:center;gap:10px;margin:8px 0}
-.hrow .id{width:52px;font-family:'Black Han Sans';font-size:15px}
+.hrow .id{width:52px;font-family:'Pretendard',sans-serif;font-weight:900;font-size:15px}
 .hrow input[type=text]{width:110px}
 .hrow label{font-size:13px;color:var(--muted)}
 .hidden{display:none!important}
@@ -44,7 +45,7 @@ td.num{font-family:'Chakra Petch',monospace;color:var(--amber);text-align:right}
 </head>
 <body>
 <div class="top">
-  <div class="ttl">THE <span>RACE</span> — 관리자</div>
+  <div class="ttl">THE <span>RACE</span> — 관리자 <small style="font-size:11px;color:var(--muted);font-weight:400">v0.6</small></div>
   <div class="st" id="stStatus">—</div>
   <div class="conn" id="connStatus">⏳ 연결 확인 중…</div>
 </div>
@@ -64,7 +65,8 @@ td.num{font-family:'Chakra Petch',monospace;color:var(--amber);text-align:right}
       <button id="btnAuto" onclick="toggleAuto()">▶ 자동모드 켜기</button></div>
     <div class="small" id="autoMsg" style="margin-top:6px;color:var(--amber)"></div>
     <div class="small" style="margin-top:8px">흐름: 라운드 진행(참가자 자유 탐색·베팅) → ① 마감·경주 → ② 정산 → ③ 다음 라운드<br>
-    자동모드: 베팅 마감 10초 후 경주 시작 → 레이스 연출 종료 10초 후 정산 공개. 다음 라운드 시작은 항상 수동.</div>
+    자동모드: 베팅 마감 3초 후 경주 시작 → 레이스 연출 종료 3초 후 정산 공개. 다음 라운드 시작은 항상 수동.
+    스위치는 SCREEN과 공유되며, 켜두면 admin이 꺼져 있어도 SCREEN이 경주·정산을 자동 진행합니다.</div>
   </div>
   <div class="card"><h2>실시간 베팅 현황</h2>
     <div id="betBoard" class="small">시즌 없음</div>
@@ -671,6 +673,7 @@ async function startSeason(){
     await db.ref(`${ROOT}/cardTg`).set({1:tg});
   }catch(e){dbError(e);return;}
   await db.ref(`${ROOT}/results`).remove();await db.ref(`${ROOT}/bets`).remove();
+  await db.ref(`${ROOT}/locks`).remove();
   await db.ref(`${ROOT}/owned`).remove();await db.ref(`${ROOT}/verified`).remove();
 await db.ref(`${ROOT}/log`).remove();
   verifyReq={};inFlight.clear();
@@ -823,7 +826,15 @@ function captainPicks(seed,round,field,deck,tg,gates,statMods,fatigue){
 function effStats(h){const s=[...HORSES[h].s];const mods=(state.statMods||{})[h]||{};
   STATN.forEach((n,i)=>{if(mods[n])s[i]=Math.max(5,Math.min(60,s[i]+mods[n]));});return s;}
 function baseScore(h){return baseWith(h,effStats(h),state.round,state.fatigue);}
+async function acquireRaceLock(r,who){
+  try{
+    const res=await db.ref(`${ROOT}/locks/race${r}`).transaction(cur=>cur===null?{by:who,t:Date.now()}:undefined);
+    return res.committed;
+  }catch(e){return false;}
+}
 async function runRace(){
+  const _r0=state.round;
+  if(!(await acquireRaceLock(_r0,'admin'))){log(`R${_r0} 경주는 이미 다른 실행자(스크린 자동모드 등)가 처리했습니다`);return;}
   await botFlush();
   const r=state.round,T=truths();const field=Object.values(state.field);
   const deck=Object.values(state.deck||{});
@@ -907,12 +918,14 @@ async function runRace(){
 
 /* ════════ 자동모드 ════════ */
 let auto=false,autoMark=0,autoStage='',autoDoneKey='';
-function toggleAuto(){
-  auto=!auto;autoStage='';autoMark=0;
+function toggleAuto(){db.ref(`${ROOT}/config/auto`).set(!auto).catch(e=>dbError(e));}
+db.ref(`${ROOT}/config/auto`).on('value',s=>{
+  const v=!!s.val();if(v===auto)return;
+  auto=v;autoStage='';autoMark=0;
   $('btnAuto').textContent=auto?'⏸ 자동모드 끄기':'▶ 자동모드 켜기';
   $('autoMsg').textContent=auto?'자동모드 대기 중':'';
-  log(auto?'자동모드 ON':'자동모드 OFF');
-}
+  log(auto?'자동모드 ON (admin·screen 공유)':'자동모드 OFF');
+});
 setInterval(autoTick,400);
 function autoTick(){
   if(!auto)return;
@@ -922,7 +935,7 @@ function autoTick(){
   if(state.phase==='open'){
     if(!state.deadline||Date.now()<=state.deadline){autoStage='';msg.textContent='자동: 베팅 마감 대기 중';return;}
     if(autoDoneKey===key)return;
-    if(autoStage!=='cd'){autoStage='cd';autoMark=Date.now()+10000;}
+    if(autoStage!=='cd'){autoStage='cd';autoMark=Date.now()+3000;}
     const s=Math.ceil((autoMark-Date.now())/1000);
     if(s>0){msg.textContent=`자동: ${s}초 후 베팅 마감 · 경주 시작`;return;}
     autoDoneKey=key;autoStage='';
@@ -931,7 +944,7 @@ function autoTick(){
   }else if(state.phase==='race'){
     if(!raceAt)raceAt=Date.now(); // 새로고침 등으로 시작 시각을 모르면 지금부터 다시 대기
     const dur={'단':13,'중':20,'장':27}[SC(state.round).d]+16; // 배당 공개 프리롤(~9초)+연출+우승 배너 여유
-    const s=Math.ceil((raceAt+(dur+10)*1000-Date.now())/1000);
+    const s=Math.ceil((raceAt+(dur+3)*1000-Date.now())/1000);
     if(s>0){msg.textContent=`자동: ${s}초 후 정산 공개`;return;}
     if(autoDoneKey===key)return;
     autoDoneKey=key;
@@ -1003,7 +1016,7 @@ function renderBotMsg(){
     const conc=tr.tau<=2.6?'집중':tr.tau>=4.2?'분산':'보통';
     return `<div style="border:1px solid var(--line);border-radius:8px;padding:7px 10px;margin-bottom:6px">
       <div><b>🤖 ${p.name}</b> <span style="color:var(--amber)">${p.persona||''}</span>
-        <span style="float:right;font-family:'Chakra Petch',monospace;color:var(--amber)">${fmt(p.money)}만</span></div>
+        <span style="float:right;font-family:'Chakra Petch','Pretendard',monospace;color:var(--amber)">${fmt(p.money)}만</span></div>
       <div style="color:var(--muted);font-size:11.5px;margin-top:2px">${PDESC[p.persona]||''}</div>
       <div style="color:var(--muted);font-size:11.5px">정보구매 ${Math.round(tr.buy*100)}% · 베팅강도 ${Math.round(tr.stake*100)}% · ${conc}형 ${tr.horses}마리 · ${(tr.late||0.5)>=0.75?'막판형':'조기형'} · 재베팅 ${Math.round((tr.revise!==undefined?tr.revise:0.35)*100)}%</div>
       <div style="font-size:12px;margin-top:3px">R${r} ${betTxt}</div>
