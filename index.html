@@ -415,7 +415,7 @@ $('btnJoin').onclick=async()=>{
       const codeSnap=await db.ref(`${ROOT}/config/entryCode`).get();
       const code=codeSnap.val();
       if(code&&($('joinCode').value||'').trim()!==code)return toast('입장코드가 올바르지 않습니다');
-      await ref.set({name,money:100,welfareUsed:false,joinedAt:Date.now()});
+      await ref.set({name,money:START_MONEY,welfareUsed:false,joinedAt:Date.now()});
     }
     $('joinStatus').innerHTML='🟢 입장 처리 중…';
     listen();

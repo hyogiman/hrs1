@@ -825,19 +825,17 @@ async function runRace(){
     if(h===winner&&raw>15)welfareExcess=fmt((raw-15)*pool[h]);
   });
   const truthsOut={};deck.forEach(ci=>{const c=cardOf(r,ci);if(c&&!c.noeff)truthsOut[ci]=truthOf(r,ci);});
+  const sp=SPECIAL[r];
+  const spHorse=sp?order[sp.rank-1]:null;
+  let spPaid=0;
   const moneyBefore={};Object.keys(players).forEach(id=>moneyBefore[id]=players[id].money);
   const env=SCHEDULE[r-1];
   await db.ref(`${ROOT}/results/${r}`).set({field,deck,bases,infos,scores,order,winner,odds,pool,total,
     baseP,envP,gates,stats:statSnap,cardTg:rtg,
     env:{d:env.d,going:env.going,wind:env.wind,temp:env.temp,name:env.name},
-    special:SPECIAL[r]?{rank:SPECIAL[r].rank,mult:SPECIAL[r].mult,horse:order[SPECIAL[r].rank-1]}:null,
+    special:sp?{rank:sp.rank,mult:sp.mult,horse:spHorse}:null,
     welfareExcess,truths:truthsOut,moneyBefore,t:Date.now()});
   await db.ref(`${ROOT}/state/phase`).set('race');
-  log(`R${r} 계산 완료 — 우승 ${disp(winner)} (${scores[winner]}점), 배당 ${odds[winner]||0}배`);
-  if(sp)log(`★ 스페셜 R${r} — ${sp.rank}위 ${disp(spHorse)} 적중자에게 ×${sp.mult}배 지급 (총 ${fmt(spPaid)}만 주입)`);
-  const sp=SPECIAL[r];
-  const spHorse=sp?order[sp.rank-1]:null;
-  let spPaid=0;
   const ups={};
   for(const id of Object.keys(rb)){
     const b=rb[id];let back=0;
@@ -846,6 +844,8 @@ async function runRace(){
     if(back>0)ups[`${id}/money`]=fmt(players[id].money+back);
   }
   if(Object.keys(ups).length)await db.ref(`${ROOT}/players`).update(ups);
+  log(`R${r} 계산 완료 — 우승 ${disp(winner)} (${scores[winner]}점), 배당 ${odds[winner]||0}배`);
+  if(sp)log(`★ 스페셜 R${r} — ${sp.rank}위 ${disp(spHorse)} 적중자에게 ×${sp.mult}배 지급 (총 ${fmt(spPaid)}만 주입)`);
   setTimeout(async()=>{
     const snap=(await db.ref(`${ROOT}/players`).get()).val()||{};
     for(const id of Object.keys(snap)){
@@ -1031,11 +1031,19 @@ async function botBuyInfo(uid){
   const statBest=field.slice().sort((a,b)=>noI[b]-noI[a])[0];
   const focus=capt.filter(h=>h!==statBest);
   const deck=Object.values(state.deck||{}),tg=state.cardTg||{};
-  const cand=deck.filter(i=>!owned[i]).sort((a,b)=>{
-    const ha=tg[a],hb=tg[b];
-    const sa=(focus.includes(ha)?2:0)+(capt.includes(ha)?1:0);
-    const sb=(focus.includes(hb)?2:0)+(capt.includes(hb)?1:0);
-    return sb-sa;});
+  // 성향별 구매 방식: 절반은 천기누설 후보를 파고들고, 절반은 자유롭게 탐색
+  // (전원이 같은 말만 조사하면 추정이 한곳으로 수렴 → 판돈 쏠림. 탐색봇이 배당 다양성을 만든다)
+  const explore=(uid.split('').reduce((a,ch)=>a+ch.charCodeAt(0),0)%2)===1;
+  let cand=deck.filter(i=>!owned[i]);
+  if(explore){
+    for(let k=cand.length-1;k>0;k--){const j2=Math.floor(Math.random()*(k+1));[cand[k],cand[j2]]=[cand[j2],cand[k]];}
+  }else{
+    cand=cand.slice().sort((a,b)=>{
+      const ha=tg[a],hb=tg[b];
+      const sa=(focus.includes(ha)?2:0)+(capt.includes(ha)?1:0);
+      const sb=(focus.includes(hb)?2:0)+(capt.includes(hb)?1:0);
+      return sb-sa;});
+  }
   // 성향별 구매 의욕 + 이월 판단(후보가 좁혀진 라운드에 더 씀)
   const eager=(pr.buy!==undefined?pr.buy:0.4);
   let want=Math.round(eager*BUY_BASE+(focus.length<=1?1:0));

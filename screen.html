@@ -120,7 +120,17 @@ let CUSTOM={};
 function cardOf(r,i){i=+i;return i>=CUSTOM_BASE?((CUSTOM[r]||{})[i]||null):CARDS[r-1][i];}
 function effStats2(h){const st=[...HORSES[h].s];const mods=(state&&state.statMods||{})[h]||{};
   STATN2.forEach((n,i)=>{if(mods[n])st[i]=Math.max(5,Math.min(60,st[i]+mods[n]));});return st;}
-const SCHEDULE=[['중',0],['단',0],['장',0],['중',1],['단',0],['장',1],['중',0],['단',1],['중',0],['장',0]];
+const SCHEDULE=[
+ {d:'중',going:'양호',wind:'무풍',temp:'온화',name:'개막전'},
+ {d:'단',going:'양호',wind:'순풍',temp:'온화',name:'스프린트'},
+ {d:'장',going:'다습',wind:'무풍',temp:'혹서',name:'장거리 인내전'},
+ {d:'중',going:'불량',wind:'역풍',temp:'온화',name:'진창 혈투'},
+ {d:'단',going:'양호',wind:'무풍',temp:'혹한',name:'한파 스프린트'},
+ {d:'장',going:'다습',wind:'역풍',temp:'온화',name:'역풍 마라톤'},
+ {d:'중',going:'양호',wind:'순풍',temp:'혹서',name:'폭염 하이페이스'},
+ {d:'단',going:'불량',wind:'역풍',temp:'혹한',name:'최악의 날'},
+ {d:'중',going:'다습',wind:'무풍',temp:'온화',name:'준결승'},
+ {d:'장',going:'불량',wind:'순풍',temp:'혹서',name:'파이널'}];
 const MEDIA={'공시':{rel:1,name:'중앙경마협회 공식공시'},'경마일보':{rel:.85,name:'경마일보'},
  '김패독':{rel:.70,name:'김패독의 새벽조교'},'터프':{rel:.50,name:'주간 터프'},
  '마방수첩':{rel:.50,name:'마방수첩'},'광장':{rel:.30,name:'말들의 광장'},'찌라시':{rel:.30,name:'찌라시.txt'}};
@@ -268,9 +278,9 @@ db.ref(`${ROOT}/results`).on('value',s=>{results=s.val()||{};
   if(state&&(state.phase==='race'||state.phase==='result'))render(true);});
 db.ref(`${ROOT}/names`).on('value',s=>{NAMES=s.val()||{};render(true);});
 
-function autoText(){const r=state.round;const [d,mud]=SCHEDULE[r-1];
-  let t=`제${r}경주 조건 확정: ${d==='단'?'단거리 1200m':d==='중'?'중거리 1800m':'장거리 2400m'}, 주로 ${mud?'불량':'양호'}.`;
-  if(state.fatigue)t+=` 컨디션 공시 — ${state.fatigue}: 전 경주 피로 ▼`;return t;}
+function autoText(){const r=state.round,S=SCHEDULE[r-1];
+  let t=`제${r}경주 ${S.name} — ${S.d==='단'?'단거리 1200m':S.d==='중'?'중거리 1800m':'장거리 2400m'} · 주로 ${S.going} · ${S.wind} · ${S.temp}`;
+  if(state.fatigue)t+=` · 컨디션 공시 — ${state.fatigue}: 전 경주 피로 ▼`;return t;}
 function field(){return state.field?Object.values(state.field):[];}
 function tgOfCur(i){const t=(state&&state.cardTg||{})[i];return t?disp(t):'?';}
 function cardText(c,i){return c.auto?autoText():(c.t||'').replace(/\{말\}/g,tgOfCur(i));}
@@ -299,7 +309,7 @@ function renderLobby(){
   <p class="subbig" style="margin-top:30px">현재 입장 <b style="color:var(--amber)">${Object.keys(players).length}</b>명 — 휴대폰으로 접속해주세요</p>`;
 }
 function renderOpen(){
-  const [d,mud]=SCHEDULE[state.round-1];
+  const S=SCHEDULE[state.round-1];
   let rankHtml='';
   if(state.showRanking){
     const all=Object.values(players).map(p=>({n:p.name,m:p.money})).sort((a,b)=>b.m-a.m).slice(0,5);
@@ -307,7 +317,7 @@ function renderOpen(){
       중간 순위 (1회 공개) — ${all.map((a,i)=>`${i+1}위 ${a.n} ${fmt(a.m)}만`).join(' · ')}</div>`;
   }
   C.innerHTML=`${rankHtml}
-  <div class="condbar">ROUND ${state.round} — ${d==='단'?'단거리 1200m':d==='중'?'중거리 1800m':'장거리 2400m'} · 주로 ${mud?'불량 ☔':'양호 ☀'}</div>
+  <div class="condbar">ROUND ${state.round} <b style="color:var(--amber)">${S.name}</b> — ${S.d==='단'?'단거리 1200m':S.d==='중'?'중거리 1800m':'장거리 2400m'} · 주로 ${S.going==='불량'?'불량 ☔':S.going==='다습'?'다습 🌫':'양호 ☀'} · ${S.wind} · ${S.temp}${state.special?` · <b style="color:var(--up)">★ 스페셜 ${state.special.rank}위 ×${state.special.mult}배</b>`:''}</div>
   <div style="display:flex;justify-content:center;gap:22px;margin:6px 0 14px">
     ${field().map(h=>`<span style="font-family:'Black Han Sans';font-size:22px;color:${HORSES[h].c}">🐎 ${disp(h)}${state.fatigue===h?' ▼':''}</span>`).join('')}
   </div>
@@ -349,7 +359,6 @@ function renderRace(){
   // 새로고침 등으로 늦게 합류하면 프리롤 생략
   if(res.t&&Date.now()-res.t>12000){renderRaceRun();return;}
   const f=res.field;
-  const [d0]=SCHEDULE[state.round-1];
   // 배당 높은 순(비인기)부터 공개, 본명(최저 배당)은 마지막 — 판돈 없는 말이 맨 앞
   const revealOrder=[...f].sort((a,b)=>{
     const oa=res.pool[a]?res.odds[a]:999,ob=res.pool[b]?res.odds[b]:999;
