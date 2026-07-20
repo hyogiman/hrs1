@@ -38,6 +38,8 @@ td.num{font-family:'Chakra Petch',monospace;color:var(--amber);text-align:right}
 .hrow input[type=text]{width:110px}
 .hrow label{font-size:13px;color:var(--muted)}
 .hidden{display:none!important}
+.tabbtn{background:none;border:1px solid var(--line);border-radius:8px;padding:5px 12px;color:var(--muted);cursor:pointer;font-size:12px}
+.tabbtn.on{border-color:var(--amber);color:var(--amber);font-weight:700}
 </style>
 </head>
 <body>
@@ -156,6 +158,14 @@ td.num{font-family:'Chakra Petch',monospace;color:var(--amber);text-align:right}
     <input id="seedInput" placeholder="비우면 랜덤" style="width:160px">
     <div class="small" style="margin-top:6px">값을 넣고 시즌을 시작하면 진위·출전 시퀀스가 동일하게 재현됩니다.</div>
   </div>
+  <div class="card"><h2>운영 현황</h2>
+    <div style="display:flex;gap:8px;margin-bottom:8px">
+      <button class="tabbtn on" id="opsT1" onclick="opsTab=1;renderOps()">실시간 순위</button>
+      <button class="tabbtn" id="opsT2" onclick="opsTab=2;renderOps()">참가자 활동 로그</button>
+      <button class="tabbtn" id="opsT3" onclick="opsTab=3;renderOps()">말별 기록</button>
+    </div>
+    <div id="opsBody" class="small">시즌 시작 전</div>
+  </div>
   <div class="card"><h2>스페셜 라운드 <span class="small" style="color:var(--muted)">상금 외부 지급 — 자금 조달 장치</span></h2>
     <div>라운드 <select id="spRound"></select>
       · 대상 등수 <select id="spRank"><option value="1">1위</option><option value="2" selected>2위</option><option value="3">3위</option><option value="4">4위</option><option value="5">5위</option></select>
@@ -221,21 +231,34 @@ function dbError(e){
 const HORSES={'질풍':{s:[42,48,12,19,29]},'만리':{s:[31,14,49,28,28]},'중용':{s:[38,32,30,23,27]},
  '우직':{s:[29,21,32,47,21]},'적토':{s:[45,39,27,22,17]},'섬광':{s:[40,38,22,17,33]},'현무':{s:[32,24,43,20,31]}};
 const STATN=['스피드','스타트','뒷심','적응력','기수'];
-/* 라운드 편성: 거리 + 환경 4요소 (고정 편성 — 카드 서사와 환경을 일치시키기 위함) */
+/* ── 에피소드(경주 조건 묶음): 날씨·기후·트랙·바람 + 서사 이름 ──
+   카드 서사와 환경이 일치하도록 에피소드 단위로 고정하되,
+   시즌마다 순서를 셔플한다 (개막전=1R, 파이널=10R 고정 · 나머지 8개 셔플) */
 const SCHEDULE=[
- {d:'중',going:'양호',wind:'무풍',temp:'온화',name:'개막전'},
- {d:'단',going:'양호',wind:'순풍',temp:'온화',name:'스프린트'},
- {d:'장',going:'다습',wind:'무풍',temp:'혹서',name:'장거리 인내전'},
- {d:'중',going:'불량',wind:'역풍',temp:'온화',name:'진창 혈투'},
- {d:'단',going:'양호',wind:'무풍',temp:'혹한',name:'한파 스프린트'},
- {d:'장',going:'다습',wind:'역풍',temp:'온화',name:'역풍 마라톤'},
- {d:'중',going:'양호',wind:'순풍',temp:'혹서',name:'폭염 하이페이스'},
- {d:'단',going:'불량',wind:'역풍',temp:'혹한',name:'최악의 날'},
- {d:'중',going:'다습',wind:'무풍',temp:'온화',name:'준결승'},
- {d:'장',going:'불량',wind:'순풍',temp:'혹서',name:'파이널'}];
+ {d:'중',wx:'맑음',temp:'온화',track:'매우 단단함',wind:'무풍',name:'개막전'},
+ {d:'단',wx:'맑음',temp:'온화',track:'매우 단단함',wind:'순풍',name:'스프린트'},
+ {d:'장',wx:'흐림',temp:'혹서',track:'초원',wind:'무풍',name:'장거리 인내전'},
+ {d:'중',wx:'비',temp:'온화',track:'진흙탕',wind:'역풍',name:'진창 혈투'},
+ {d:'단',wx:'눈',temp:'혹한',track:'설원',wind:'무풍',name:'설원 스프린트'},
+ {d:'장',wx:'흐림',temp:'온화',track:'초원',wind:'역풍',name:'역풍 마라톤'},
+ {d:'중',wx:'맑음',temp:'혹서',track:'매우 단단함',wind:'순풍',name:'폭염 하이페이스'},
+ {d:'단',wx:'비',temp:'혹한',track:'진흙탕',wind:'역풍',name:'최악의 날'},
+ {d:'중',wx:'흐림',temp:'온화',track:'초원',wind:'무풍',name:'안개 낀 대회전'},
+ {d:'장',wx:'비',temp:'혹서',track:'진흙탕',wind:'순풍',name:'파이널'}];
 const DISTW={'단':[.35,.50,.15],'중':[.40,.30,.30],'장':[.35,.15,.50]};
-const GOINGC={'양호':0.10,'다습':0.33,'불량':0.55};   // 주로 → 적응력 반영 계수
-const ENVC={wS:0.22,wF:0.34,tJ:0.42,tS:0.16,gate:1.3,gateS:1.1};
+const WXICON={'맑음':'☀','흐림':'☁','비':'🌧','눈':'❄'};
+const TRACKC={'매우 단단함':0.08,'초원':0.20,'진흙탕':0.55,'설원':0.42}; // 트랙 → 적응력 계수
+const ENVC={wS:0.22,wF:0.34,tJ:0.42,tS:0.16,gate:1.3,gateS:1.1,rain:0.06,snow:0.06};
+const CTR={ad:25,jk:27,st:31};   // 적응력·기수·스타트의 기준점(전마 평균) — ▲▼ 대칭 표기용
+/* 시즌 시드 → 에피소드 순서 (1·10 고정, 2~9 셔플) */
+let _epCache={},_seedOverride=null;
+function epOrder(seed){seed=(seed>>>0);if(_epCache[seed])return _epCache[seed];
+  const rng=mulberry32((seed^0x9E3779B9)>>>0);const mid=[1,2,3,4,5,6,7,8];
+  for(let i=mid.length-1;i>0;i--){const j=Math.floor(rng()*(i+1));[mid[i],mid[j]]=[mid[j],mid[i]];}
+  return _epCache[seed]=[0,...mid,9];}
+function CURSEED(){return (typeof state!=='undefined'&&state&&state.seed!==undefined)?state.seed:(_seedOverride!==null?_seedOverride:0);}
+function SC(r){return SCHEDULE[epOrder(CURSEED())[r-1]];}
+function EPX(r){return epOrder(CURSEED())[r-1];}
 const BASE_SCALE=44;
 const CUSTOM_BASE=100;  // 커스텀 카드 인덱스 시작
 const INFO_CAP=24;      // 라운드당 정보 효과 상한(±점)
@@ -343,7 +366,7 @@ const CARDS=[
  {m:'마방수첩',pub:0,t:'{말} 빗소리만 나면 발을 구르더라. 불안한 건지 신난 건지',stat:'적응력',d:-14}
 ],
 [
- {m:'찌라시',pub:0,t:'[제보] {말} 준결승 앞두고 마주가 조교사 갈아치웠다는 얘기',stat:'컨디션',d:-13},
+ {m:'찌라시',pub:0,t:'[제보] {말} 큰 경주 앞두고 마주가 조교사 갈아치웠다는 얘기',stat:'컨디션',d:-13},
  {m:'경마일보',pub:0,t:'{말}, 후반기 최다 상위권 진입 — 꾸준함으로 입증',stat:'컨디션',d:4},
  {m:'김패독',pub:0,t:'"지금 폼으로 {말}을 이길 말은 없어요. 단언합니다"',stat:'컨디션',d:7},
  {m:'터프',pub:0,t:'{말} 혹사 논란 — 피로 누적 심각설!!',stat:'컨디션',d:-10},
@@ -386,7 +409,8 @@ function pickField(seed,round){
 }
 /* 덱: 라운드 카드 10장 전량 발행 (전부 비공개 — 상점에서만 열람 가능) */
 function pickDeck(seed,round){
-  return CARDS[round-1].map((c,i)=>i).filter(i=>!CARDS[round-1][i].noeff);
+  const ep=EPX(round);
+  return CARDS[ep].map((c,i)=>i).filter(i=>!CARDS[ep][i].noeff);
 }
 /* 카드 대상 배정: 출전 5마리에 정확히 2장씩 */
 function assignTargets(seed,round,field,deck){
@@ -394,7 +418,7 @@ function assignTargets(seed,round,field,deck){
   const slots=[];field.forEach(h=>{slots.push(h);slots.push(h);});
   for(let i=slots.length-1;i>0;i--){const j=Math.floor(rng()*(i+1));[slots[i],slots[j]]=[slots[j],slots[i]];}
   const tg={},cnt={};field.forEach(h=>cnt[h]=0);
-  const eff=deck.filter(i=>{const c=CARDS[round-1][i];return c&&!c.noeff;});
+  const eff=deck.filter(i=>{const c=CARDS[EPX(round)][i];return c&&!c.noeff;});
   eff.forEach((i,k)=>{
     let h=slots[k%slots.length];
     if(cnt[h]>=2){h=field.find(x=>cnt[x]<2)||h;}
@@ -405,11 +429,10 @@ function assignTargets(seed,round,field,deck){
 function genTruth(seed){
   const rng=mulberry32(seed);
   const byMedia={};
-  for(let r=1;r<=10;r++){
-    const deck=pickDeck(seed,r);
-    deck.forEach(i=>{const c=CARDS[r-1][i];
+  for(let ep=0;ep<10;ep++){
+    CARDS[ep].forEach((c,i)=>{
       if(c.noeff)return;
-      (byMedia[c.m]=byMedia[c.m]||[]).push({r:r-1,i,hid:!c.pub});});
+      (byMedia[c.m]=byMedia[c.m]||[]).push({r:ep,i,hid:!c.pub});});
   }
   const truth={};
   Object.keys(byMedia).forEach(m=>{
@@ -430,16 +453,18 @@ function raceRng(seed,round,horse){
    정보  = 카드 효과 합 (캡 ±24)
    목표 기여 비율 대략 2 : 3 : 5 */
 function baseOnly(stArr,round){
-  const S=SCHEDULE[round-1],w=DISTW[S.d];
+  const S=SC(round),w=DISTW[S.d];
   return (stArr[0]*w[0]+stArr[1]*w[1]+stArr[2]*w[2])/50*BASE_SCALE;
 }
 function envOnly(stArr,round,gate,fatigue,isFat){
-  const S=SCHEDULE[round-1];let e=0;
-  e-=(50-stArr[3])*GOINGC[S.going];                       // 주로: 적응력
+  const S=SC(round);let e=0;
+  e+=(stArr[3]-CTR.ad)*TRACKC[S.track];                  // 트랙: 적응력 (평균 대비 ±)
   if(S.wind==='순풍')e+=(stArr[0]-38)*ENVC.wS;            // 순풍: 스피드형 유리
   if(S.wind==='역풍')e+=(stArr[2]-33)*ENVC.wF;            // 역풍: 뒷심형 유리
-  if(S.temp==='혹서')e-=(50-stArr[4])*ENVC.tJ;           // 혹서: 기수 역량
-  if(S.temp==='혹한')e-=(50-stArr[1])*ENVC.tS;           // 혹한: 스타트 둔화
+  if(S.temp==='혹서')e+=(stArr[4]-CTR.jk)*ENVC.tJ;       // 혹서: 기수 역량 (평균 대비 ±)
+  if(S.temp==='혹한')e+=(stArr[1]-CTR.st)*ENVC.tS;       // 혹한: 스타트 (평균 대비 ±)
+  if(S.wx==='비')e+=(stArr[1]-CTR.st)*ENVC.rain;         // 비: 미끄러운 발주
+  if(S.wx==='눈')e+=(stArr[4]-CTR.jk)*ENVC.snow;         // 눈: 시야 — 기수 침착성
   e+=(3-gate)*ENVC.gate+((stArr[1]-33)/50)*(gate-3)*ENVC.gateS;  // 게이트
   if(isFat)e-=0.15*(60-stArr[4]);                        // 직전 우승 피로
   return e;
@@ -457,39 +482,38 @@ function assignGates(seed,round,field){
 }
 /* 마사회 공식 정보 (100% 사실 · 전체 공개) */
 function kraNotice(round){
-  const S=SCHEDULE[round-1];
+  const S=SC(round);
   const dn={'단':'단거리 1200m','중':'중거리 1800m','장':'장거리 2400m'}[S.d];
-  const gs={'양호':'주로 양호 — 발밑이 단단합니다','다습':'주로 다습 — 군데군데 물기가 남아 있습니다','불량':'주로 불량 — 진창 구간이 넓게 형성됐습니다'}[S.going];
+  const wx={'맑음':'☀ 맑음 — 쾌청한 경마 날씨입니다','흐림':'☁ 흐림 — 구름이 낮게 깔렸습니다',
+    '비':'🌧 비 — 발주 시 미끄러짐에 주의가 필요합니다','눈':'❄ 눈 — 시야가 좁아 기수의 침착함이 시험대에 오릅니다'}[S.wx];
+  const ts={'온화':'기후 온화','혹서':'폭염 경보 — 기수의 페이스 조절이 관건입니다','혹한':'한파 — 근육이 굳어 초반 반응이 둔해집니다'}[S.temp];
+  const tk={'매우 단단함':'트랙 매우 단단함 — 스피드가 그대로 실리는 노면입니다',
+    '초원':'트랙 초원 — 부드러운 잔디, 발굽 적응이 조금 필요합니다',
+    '진흙탕':'트랙 진흙탕 — 발이 푹푹 빠집니다. 적응력이 낮은 말에게는 지옥입니다',
+    '설원':'트랙 설원 — 눈 덮인 주로, 익숙하지 않은 말은 힘을 쓰지 못합니다'}[S.track];
   const ws={'무풍':'바람 거의 없음','순풍':'직선주로 순풍 — 속도가 실립니다','역풍':'직선주로 역풍 — 막판 체력 소모가 큽니다'}[S.wind];
-  const ts={'온화':'기온 온화','혹서':'폭염 경보 — 기수의 페이스 조절이 관건입니다','혹한':'한파 — 근육이 굳어 초반 반응이 둔해집니다'}[S.temp];
-  return {title:`제${round}경주 ${S.name} · ${dn}`,lines:[gs,ws,ts]};
+  return {title:`제${round}경주 ${S.name} · ${dn}`,lines:[wx,ts,tk,ws]};
 }
 /* 카드 1장의 근사 실효(사실일 때, 자문·미리보기용) */
 function impactPts(c,round){
   if(c.noeff)return 0;
   if(c.stat==='컨디션')return c.d;
-  const S=SCHEDULE[round-1],w=DISTW[S.d];
+  const S=SC(round),w=DISTW[S.d];
   const si=STATN.indexOf(c.stat);
-  if(si<=2)return c.d*w[si]*(BASE_SCALE/50);
-  if(c.stat==='적응력')return c.d*GOINGC[S.going];
-  if(c.stat==='기수')return S.temp==='혹서'?c.d*ENVC.tJ:0;
+  if(si<=2&&si>=0)return c.d*w[si]*(BASE_SCALE/50);
+  if(c.stat==='적응력')return c.d*TRACKC[S.track];
+  if(c.stat==='기수')return (S.temp==='혹서'?c.d*ENVC.tJ:0)+(S.wx==='눈'?c.d*ENVC.snow:0);
   return 0;
 }
-function _impactOld(c,round){
-  const S=SCHEDULE[round-1],w=DISTW[S.d];
-  const si=STATN.indexOf(c.stat);
-  if(si<=2)return c.d*w[si]*1.2;
-  if(c.stat==='적응력')return mud?c.d*0.3:0;
-  return 0;
-}
+
 
 /* ════════ 상태 ════════ */
 let state=null,players={},bets={},truthCache=null,CUSTOM={},DESC={};
 /* 카드 접근자: 100 이상은 관리자가 직접 작성한 커스텀 소식 */
-function cardOf(r,i){i=+i;return i>=CUSTOM_BASE?((CUSTOM[r]||{})[i]||null):CARDS[r-1][i];}
+function cardOf(r,i){i=+i;return i>=CUSTOM_BASE?((CUSTOM[r]||{})[i]||null):CARDS[EPX(r)][i];}
 function truthOf(r,i){i=+i;
   if(i>=CUSTOM_BASE){const c=cardOf(r,i);return !!(c&&c.truth);}
-  const T=truths();return !!(T&&T[`${r-1}_${i}`]);}
+  const T=truths();return !!(T&&T[`${EPX(r)}_${i}`]);}
 function customIdx(r){return Object.keys(CUSTOM[r]||{}).map(Number).sort((a,b)=>a-b);}
 /* 커스텀 소식의 대상 말들 — 해당 라운드 출전 자동 확정 */
 function customTargets(r){
@@ -530,8 +554,8 @@ db.ref(`${ROOT}/state`).on('value',s=>{
   if(state&&state.phase==='race'&&prevPhase!=='race')raceAt=Date.now();
   truthCacheCheck();renderStatus();renderBetBoard();
   if(typeof sweepRequests==='function')sweepRequests();});
-db.ref(`${ROOT}/players`).on('value',s=>{players=s.val()||{};renderPlayers();});
-db.ref(`${ROOT}/bets`).on('value',s=>{bets=s.val()||{};renderPlayers();renderBetBoard();});
+db.ref(`${ROOT}/players`).on('value',s=>{players=s.val()||{};renderPlayers();if(typeof renderOps==='function')renderOps();});
+db.ref(`${ROOT}/bets`).on('value',s=>{bets=s.val()||{};renderPlayers();renderBetBoard();if(typeof renderOps==='function')renderOps();});
 db.ref(`${ROOT}/names`).on('value',s=>{NAMES=s.val()||{};renderNameRows();renderFieldRows();renderPlayers();renderBetBoard();if(typeof initCustomUI==='function')initCustomUI();});
 let cachedSeed=null;
 function truthCacheCheck(){if(state&&state.seed!==cachedSeed){truthCache=null;cachedSeed=state?state.seed:null;}}
@@ -639,7 +663,7 @@ async function startSeason(){
   const secs=parseInt($('betSecs').value)||300;
   const {field,deck,tg}=buildRound(seed,1);
   const gates=assignGates(seed,1,field);
-  truthCache=genTruth(seed);cachedSeed=seed;
+  _seedOverride=seed;truthCache=genTruth(seed);cachedSeed=seed;
   const capt=captainPicks(seed,1,field,deck,tg,gates,null,null);
   try{
     await db.ref(`${ROOT}/state`).set({phase:'open',round:1,seed,field,deck,fatigue:null,statMods:null,
@@ -734,7 +758,27 @@ const CAPT_LINES=[
  '전문가들이 {말}을 말 안 하는 이유',
  '{말}, 데이터가 이상하게 좋습니다',
  '이 채널만 아는 {말} 이야기',
- '{말} 지금 안 잡으면 배당 다 날아갑니다'];
+ '{말} 지금 안 잡으면 배당 다 날아갑니다',
+ '충격) {말} 새벽 훈련 직접 보고 왔습니다',
+ '{말} 이거 알고도 안 사면 바보입니다',
+ '30년 마권사가 {말}에 주목하는 이유',
+ '{말}, 솔직히 저도 반신반의했는데요',
+ '오늘자 {말} 근황이 심상치 않다',
+ '{말} 관계자 피셜 떴습니다 (진위 미확인)',
+ '다들 {말} 얘기할 때 저는 웃고 있었습니다',
+ '{말}, 이 날씨에 강한 이유가 있습니다',
+ '어제 마방 앞에서 {말} 기수를 만났습니다',
+ '{말} 배당 보고 소름 돋은 사람 손',
+ '[단독] {말} 조련 일지 입수',
+ '{말}이 조용한 게 더 무서운 이유',
+ '경마장 청소부도 아는 {말} 소문',
+ '{말} 안 믿었다가 후회한 썰 풉니다',
+ '오늘 트랙 상태, {말}한테 물어보세요',
+ '{말} 눈빛이 달라졌다는 제보가 왔습니다',
+ '이 배당에 {말}? 말이 안 되는데요',
+ '{말} 편자 갈았다는 얘기 들으셨나요',
+ '캡틴 인생 3대 픽에 {말} 넣습니다',
+ '{말}, 마지막에 웃는 건 누구일까요'];
 function captainPicks(seed,round,field,deck,tg,gates,statMods,fatigue){
   if(!field||!field.length)return [];
   const eff=h=>{const s=[...HORSES[h].s];const mm=(statMods||{})[h]||{};
@@ -770,7 +814,9 @@ function captainPicks(seed,round,field,deck,tg,gates,statMods,fatigue){
   const set=[];picks.forEach(h=>{if(!set.includes(h))set.push(h);});
   while(set.length<3&&rest.length)set.push(rest.shift());
   for(let i=set.length-1;i>0;i--){const j=Math.floor(rng()*(i+1));[set[i],set[j]]=[set[j],set[i]];}
-  return set.map((h,k)=>({h,t:CAPT_LINES[Math.floor(rng()*CAPT_LINES.length)].replace(/\{말\}/g,disp(h))}));
+  const li=CAPT_LINES.map((_,i)=>i);
+  for(let i=li.length-1;i>0;i--){const j=Math.floor(rng()*(i+1));[li[i],li[j]]=[li[j],li[i]];}
+  return set.map((h,k)=>({h,t:CAPT_LINES[li[k]].replace(/\{말\}/g,disp(h))}));
 }
 
 /* ════════ 경주 계산 + 정산 (보험 제거) ════════ */
@@ -829,10 +875,10 @@ async function runRace(){
   const spHorse=sp?order[sp.rank-1]:null;
   let spPaid=0;
   const moneyBefore={};Object.keys(players).forEach(id=>moneyBefore[id]=players[id].money);
-  const env=SCHEDULE[r-1];
+  const env=SC(r);
   await db.ref(`${ROOT}/results/${r}`).set({field,deck,bases,infos,scores,order,winner,odds,pool,total,
     baseP,envP,gates,stats:statSnap,cardTg:rtg,
-    env:{d:env.d,going:env.going,wind:env.wind,temp:env.temp,name:env.name},
+    env:{d:env.d,wx:env.wx,temp:env.temp,track:env.track,wind:env.wind,name:env.name},
     special:sp?{rank:sp.rank,mult:sp.mult,horse:spHorse}:null,
     welfareExcess,truths:truthsOut,moneyBefore,t:Date.now()});
   await db.ref(`${ROOT}/state/phase`).set('race');
@@ -884,7 +930,7 @@ function autoTick(){
     runRace();
   }else if(state.phase==='race'){
     if(!raceAt)raceAt=Date.now(); // 새로고침 등으로 시작 시각을 모르면 지금부터 다시 대기
-    const dur={'단':13,'중':20,'장':27}[SCHEDULE[state.round-1].d]+16; // 배당 공개 프리롤(~9초)+연출+우승 배너 여유
+    const dur={'단':13,'중':20,'장':27}[SC(state.round).d]+16; // 배당 공개 프리롤(~9초)+연출+우승 배너 여유
     const s=Math.ceil((raceAt+(dur+10)*1000-Date.now())/1000);
     if(s>0){msg.textContent=`자동: ${s}초 후 정산 공개`;return;}
     if(autoDoneKey===key)return;
@@ -1223,13 +1269,13 @@ async function saveEntryCode(){
 
 /* ════════ 말 도감 편집 ════════ */
 const DEXDEF={
- '질풍':{story:'게이트가 열리는 순간이 전부인 말. 첫 200m를 누구보다 먼저 빠져나가지만, 벌어놓은 거리를 지키는 일에는 서툴다. 앞서 달리다 잡히는 장면을 여러 번 만들었다.',strong:'짧은 거리에서 강함 · 거리가 길어질수록 불리'},
- '만리':{story:'출발 신호에 반응이 늦어 늘 후미에서 경주를 시작한다. 그러나 남들이 지쳐 속도가 떨어지는 구간부터 진짜 경주를 시작하는 말. 결승선이 멀수록 유리해진다.',strong:'긴 거리에서 강함 · 짧은 거리에서는 따라잡을 시간이 부족'},
- '중용':{story:'어떤 조건에서도 무너지지 않지만, 어떤 조건에서도 압도하지 못한다. 우승보다 상위권 진입 횟수가 훨씬 많은 말. 안정감이 곧 이 말의 한계다.',strong:'모든 거리에서 무난 · 특정 조건의 폭발력은 없음'},
- '우직':{story:'맑은 날에는 평범한 말로 보인다. 다른 말들이 발을 헛디디는 진창에서만 본래 모습이 나온다. 궂은 날씨를 기다리며 시즌을 견디는 말.',strong:'주로 불량일 때 강함 · 맑은 날에는 평범'},
- '적토':{story:'좋은 주로에서는 손댈 수 없는 속도를 낸다. 다만 발밑이 무너지는 조건에 유난히 약하고, 기수와의 호흡도 좋은 편은 아니다. 조건이 맞아야만 완성되는 말.',strong:'주로 양호일 때 최상급 · 진창에서 급격히 무너짐'},
- '섬광':{story:'훈련장 기록만 화려하고 실전 자료가 거의 없는 신예. 기수의 역량이 뛰어나 변수 관리에는 강하지만, 이 말의 진짜 실력을 본 사람은 아직 없다.',strong:'짧은 거리에서 강함 · 기수 역량이 높아 피로 회복이 빠름'},
- '현무':{story:'화려한 순간이 없는 대신 무너지는 순간도 없다. 페이스를 스스로 조절하며 뒤에서 천천히 올라오는 유형. 오래 달릴수록 존재감이 커진다.',strong:'긴 거리에서 강함 · 기수 역량이 높아 피로에 강함'}};
+ '질풍':{story:'북방 고원의 눈보라 속에서 발주 훈련을 받은 스프린터. 게이트가 열리는 순간 이미 승부가 절반은 끝나 있고, 얼어붙은 아침에도 근육이 굳지 않는다. 다만 발밑이 무른 진흙과는 평생 친해지지 못했다.',strong:'단거리·혹한·맑고 단단한 트랙에서 강함 · 진흙탕과 장거리에 약함'},
+ '만리':{story:'대상경주 장거리 혈통의 적자. 남들이 지치는 구간부터 진짜 경주를 시작하고, 맞바람이 불수록 낮게 웅크린 채 전진한다. 대신 출발 신호에는 늘 반 박자 늦다 — 추운 날엔 한 박자 늦는다.',strong:'장거리·역풍에서 최상급 · 스타트가 느려 혹한·단거리에 약함'},
+ '중용':{story:'어떤 날씨에도, 어떤 트랙에서도 제 몫을 하는 팔방미인. 압도하는 날이 없는 대신 무너지는 날도 없다. 우승 횟수보다 상위권 진입 횟수로 말하는 유형.',strong:'모든 조건에서 무난 · 특정 조건의 폭발력은 없음'},
+ '우직':{story:'툰드라 조랑말의 피가 흐른다는 소문이 있다. 진흙탕에 발이 빠져도, 눈 덮인 설원 위에서도 보폭이 흐트러지지 않는 유일한 말. 맑고 단단한 트랙에서는 오히려 평범해 보이는 것이 아이러니.',strong:'진흙탕·설원(적응력)의 지배자 · 쾌청한 날에는 평범'},
+ '적토':{story:'전설의 대장장이가 벼렸다는 편자를 신은 명문 혈통. 단단한 지면을 박찰 때의 가속은 누구도 흉내 낼 수 없다. 다만 어린 기수와의 호흡이 아직 설익어, 폭염 속 페이스 조절에서 번번이 무너진다.',strong:'맑고 단단한 트랙에서 최고 속도 · 혹서(기수 미숙)와 진흙에 약함'},
+ '섬광':{story:'백전노장 기수와 한 몸처럼 움직이는 신예. 폭염 경보가 내린 날에도 기수의 노련한 페이스 배분 덕에 흔들리지 않는다. 그러나 젖은 땅 위에서는 화려한 훈련장 기록이 무색해진다.',strong:'혹서(베테랑 기수)·단거리 스타트에 강함 · 진흙탕·설원 적응력 최하위'},
+ '현무':{story:'두꺼운 근육의 대기만성형 스테이어. 역풍을 뚫는 묵직한 뒷심과 더위를 견디는 침착한 기수가 무기다. 화려한 출발은 없지만, 결승선 앞에서 이 말의 그림자가 가장 길다.',strong:'장거리·역풍·혹서에 강함 · 스타트가 느려 초반 열세'}};
 function loadDesc(){
   const h=$('descSel').value,d=DESC[h]||{};
   $('descStory').value=d.story!==undefined?d.story:DEXDEF[h].story;
@@ -1305,6 +1351,80 @@ function renderCustomList(){
           <button onclick="delCustom(${r},${i})" style="float:right;padding:2px 8px;font-size:11px">삭제</button></div>
         <div style="font-size:12px;color:var(--muted);margin-top:3px">${(c.t||'').replace(/\{말\}/g,disp(c.target))}</div>
       </div>`;}).join('');
+}
+
+/* ════════ 운영 현황 (실시간 순위 · 활동 로그 · 말별 기록) ════════ */
+let opsTab=1,RESULTS_ALL={},opsSel=null;
+db.ref(`${ROOT}/results`).on('value',s=>{RESULTS_ALL=s.val()||{};renderOps();renderShopBoard();});
+function renderOps(){
+  const box=$('opsBody');if(!box)return;
+  [1,2,3].forEach(k=>{const b=$('opsT'+k);if(b)b.className='tabbtn'+(opsTab===k?' on':'');});
+  if(!state||!state.round){box.textContent='시즌 시작 전';return;}
+  if(opsTab===1)box.innerHTML=opsRankHTML();
+  else if(opsTab===2)box.innerHTML=opsLogHTML();
+  else box.innerHTML=opsHorseHTML();
+}
+function opsRankHTML(){
+  const all=Object.keys(players).map(id=>({id,p:players[id]}))
+    .sort((a,b)=>(b.p.money||0)-(a.p.money||0));
+  return `<table style="width:100%;border-collapse:collapse;font-size:12.5px">
+    <tr><th style="text-align:left">순위</th><th style="text-align:left">이름</th>
+      <th style="text-align:right">자금</th><th style="text-align:right">잔여 구매권</th></tr>
+    ${all.map((x,i)=>`<tr style="border-top:1px solid var(--line)${i<3?';color:var(--amber)':''}">
+      <td>${i+1}</td><td>${x.p.bot?'🤖 ':''}${x.p.name||x.id}</td>
+      <td class="num">${fmt(x.p.money||0)}만</td>
+      <td class="num">${x.p.credits!==undefined?x.p.credits+'회':'—'}</td></tr>`).join('')}</table>`;
+}
+function opsLogHTML(){
+  const ids=Object.keys(players).sort((a,b)=>((players[a].name||'')<(players[b].name||'')?-1:1));
+  if(!opsSel||!players[opsSel])opsSel=ids.find(id=>!players[id].bot)||ids[0];
+  const sel=`<select onchange="opsSel=this.value;renderOps()" style="margin-bottom:8px">
+    ${ids.map(id=>`<option value="${id}"${id===opsSel?' selected':''}>${players[id].bot?'🤖 ':''}${players[id].name||id}</option>`).join('')}</select>`;
+  let rows='';
+  for(let r=1;r<=(state.round||1);r++){
+    const b=(bets[r]||{})[opsSel];
+    const o=Object.keys(((ownedAll[opsSel]||{})[r])||{});
+    const res=RESULTS_ALL[r];
+    const buys=o.map(ci=>{
+      const tg=res&&res.cardTg?res.cardTg[ci]:(r===state.round?(state.cardTg||{})[ci]:null);
+      return tg?disp(tg):'?';});
+    const v=(verifiedAll[opsSel]||{})[r];
+    let out=[];
+    if(o.length)out.push(`🛒 정보 ${o.length}건 (${buys.join(', ')})`);
+    if(v&&v.idx!==undefined)out.push(`🔍 판별 ${v.count||1}회`);
+    if(b)out.push(`💰 베팅 ${b.total}만 — ${Object.keys(b.stakes||{}).map(h=>`${disp(h)} ${b.stakes[h]}`).join(', ')}`);
+    if(res&&b){
+      let back=0;
+      if(b.stakes&&b.stakes[res.winner])back+=b.stakes[res.winner]*(res.odds[res.winner]||0);
+      if(res.special&&b.stakes&&b.stakes[res.special.horse])back+=b.stakes[res.special.horse]*res.special.mult;
+      out.push(`→ 회수 ${fmt(back)}만 (${back>=b.total?'+':''}${fmt(back-b.total)})`);
+    }
+    if(out.length)rows+=`<div style="border-top:1px solid var(--line);padding:5px 0"><b style="color:var(--amber)">R${r}</b> ${out.join(' · ')}</div>`;
+  }
+  return sel+(rows||'<div style="color:var(--muted)">활동 기록 없음</div>');
+}
+function opsHorseHTML(){
+  const stat={};ALLH.forEach(h=>stat[h]={run:[],win:0,fat:0});
+  const maxR=state.round||1;
+  for(let r=1;r<=maxR;r++){
+    const res=RESULTS_ALL[r];
+    const fld=res?Object.values(res.field||{}):(r===maxR&&state.field?Object.values(state.field):[]);
+    fld.forEach(h=>{if(stat[h])stat[h].run.push(r);});
+    if(res&&stat[res.winner])stat[res.winner].win++;
+    const prev=RESULTS_ALL[r-1];
+    if(prev&&prev.winner&&fld.includes(prev.winner)&&stat[prev.winner])stat[prev.winner].fat++;
+  }
+  const mods=state.statMods||{};
+  return `<table style="width:100%;border-collapse:collapse;font-size:12.5px">
+    <tr><th style="text-align:left">말</th><th style="text-align:left">출전 라운드</th>
+      <th style="text-align:right">우승</th><th style="text-align:right">피로 출전</th><th style="text-align:left;padding-left:10px">시즌 지속 효과</th></tr>
+    ${ALLH.map(h=>{const s=stat[h];const mm=mods[h]||{};
+      const pm=Object.keys(mm).filter(k=>mm[k]).map(k=>`${k} ${mm[k]>0?'+':''}${mm[k]}`).join(', ');
+      return `<tr style="border-top:1px solid var(--line)">
+      <td style="color:${HORSES[h].tag?'inherit':'inherit'}"><b>${disp(h)}</b></td>
+      <td>${s.run.length?s.run.map(r=>'R'+r).join(' '):'—'}</td>
+      <td class="num">${s.win}회</td><td class="num">${s.fat}회</td>
+      <td style="padding-left:10px;color:${pm?'var(--amber)':'var(--muted)'}">${pm||'—'}</td></tr>`;}).join('')}</table>`;
 }
 
 /* ════════ 스페셜 라운드 ════════ */
