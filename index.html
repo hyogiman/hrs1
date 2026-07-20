@@ -242,6 +242,20 @@ function envOnly(st,r,gate,isFat){const S=SCHEDULE[r-1];let e=0;
   if(isFat)e-=0.15*(60-st[4]);
   return e;}
 function gateOf(h){return ((state&&state.gates)||{})[h]||3;}
+/* 환경 영향 요소별 분해 — 출마표에서 '왜 이 점수인지' 보여주기 */
+function envBreakHTML(st,r,gate,isFat){
+  const S=SCHEDULE[r-1],items=[];
+  const push=(label,v)=>{v=fmt(v);if(v===0)return;
+    items.push(`${label} <b style="color:${v>0?'var(--up)':'var(--down)'}">${v>0?'▲':'▼'}${Math.abs(v)}</b>`);};
+  push(`주로 ${S.going}`, -(50-st[3])*GOINGC[S.going]);
+  if(S.wind==='순풍')push('순풍', (st[0]-38)*ENVC.wS);
+  if(S.wind==='역풍')push('역풍', (st[2]-33)*ENVC.wF);
+  if(S.temp==='혹서')push('혹서', -(50-st[4])*ENVC.tJ);
+  if(S.temp==='혹한')push('혹한', -(50-st[1])*ENVC.tS);
+  push(`게이트 ${gate}번`, (3-gate)*ENVC.gate+((st[1]-33)/50)*(gate-3)*ENVC.gateS);
+  if(isFat)push('전경주 피로', -0.15*(60-st[4]));
+  return items.length?items.join(' · '):'오늘 환경 영향 미미';
+}
 function noInfoScore(h){const st=effStats(h),r=state.round;
   return baseOnly(st,r)+envOnly(st,r,gateOf(h),state.fatigue===h);}
 const CUSTOM_BASE=100;
@@ -579,6 +593,10 @@ function renderTab(){
   else if(activeTab==='news')renderNewsTab(c);
   else if(activeTab==='shop')renderShopTab(c);
   else if(activeTab==='bet')renderBetTab(c);
+  if(state.special)c.insertAdjacentHTML('afterbegin',
+    `<div style="border:1.5px solid var(--up);border-radius:10px;padding:9px 13px;margin-bottom:10px;background:rgba(60,200,120,.10);font-size:13.5px;text-align:center">
+     <b style="color:var(--up)">★ 스페셜 라운드</b> — 이번 경주 <b>${state.special.rank}위</b>를 한 말에 베팅하면
+     베팅액의 <b style="color:var(--up)">${state.special.mult}배</b>를 추가 지급! <span style="color:var(--muted)">(배당과 별도)</span></div>`);
 }
 
 /* ── 출마표: 한 마리 상세 ── */
@@ -604,7 +622,7 @@ function renderHorseTab(c){
       <span style="color:var(--muted)">기본 <b style="color:var(--chalk)">${fmt(bp)}</b></span>
       <span style="color:var(--muted)">환경 <b style="color:${ep>0?'var(--up)':ep<0?'var(--down)':'var(--chalk)'}">${ep>0?'+':''}${fmt(ep)}</b></span>
       <span style="color:var(--muted)">합 <b style="color:var(--amber)">${fmt(bp+ep)}</b></span></div>
-    <div style="font-size:11px;color:var(--muted);text-align:center;margin-bottom:6px">여기에 정보 효과(±${INFO_CAP})와 당일 운이 더해집니다</div>
+    <div style="font-size:11.5px;color:var(--muted);text-align:center;margin-bottom:6px">${envBreakHTML(st,r,g,fat)}</div>
     <div class="statlist">${STATN.map((n,i)=>`
       <div class="statrow"><span class="sn">${n}</span>
       <div class="sbar"><i style="width:${st[i]*2}%;background:${HORSES[h].c}"></i></div>
@@ -921,18 +939,26 @@ function detailHTML(r,res){
     ${sp?`<div style="margin-top:6px;font-size:13px;color:var(--up)">★ 스페셜 — ${sp.rank}위 <b>${disp(sp.horse)}</b> 적중 시 ×${sp.mult}배 지급</div>`:''}
   </div>
   <div class="card"><h3 style="margin-top:0">최종 스코어</h3>
-    <div style="font-size:11.5px;color:var(--muted);margin-bottom:6px">기본(스탯) + 환경 + 정보 = 최종. 정보는 ±${INFO_CAP}점으로 제한됩니다.</div>
     <table class="paytable"><tr><th style="text-align:left">순위</th><th style="text-align:left">말</th>
-      <th style="text-align:right">기본</th><th style="text-align:right">환경</th><th style="text-align:right">정보</th><th style="text-align:right">최종</th></tr>`;
+      <th style="text-align:right">기본</th><th style="text-align:right">환경</th><th style="text-align:right">정보</th><th style="text-align:right">운</th><th style="text-align:right">최종</th></tr>`;
+  const tri=v=>{
+    if(v===undefined||v===null)return '—';
+    const n=fmt(v);
+    if(n===0)return '<span style="color:var(--muted)">—</span>';
+    const big=Math.abs(n)>=10;
+    const body=`${n>0?'▲':'▼'}${Math.abs(n)}`;
+    return `<span style="color:${n>0?'var(--up)':'var(--down)'}">${big?'<b>'+body+'</b>':body}</span>`;};
   order.forEach((hs,i)=>{
     const bp=(res.baseP||{})[hs], ep=(res.envP||{})[hs];
     const inf=(res.infos||{})[hs], sc=(res.scores||{})[hs];
+    const luck=(bp!==undefined&&ep!==undefined&&inf!==undefined&&sc!==undefined)?fmt(sc-bp-ep-inf):undefined;
     h+=`<tr${i===0?' style="background:rgba(255,176,32,.10)"':''}>
       <td>${i+1}${i===0?' 🏆':''}</td>
       <td style="color:${HORSES[hs]?HORSES[hs].c:'#fff'}">${disp(hs)} <span style="color:var(--muted);font-size:11px">${gates[hs]||'?'}번</span></td>
       <td class="num">${bp!==undefined?fmt(bp):'—'}</td>
-      <td class="num" style="color:${ep>0?'var(--up)':ep<0?'var(--down)':'inherit'}">${ep!==undefined?(ep>0?'+':'')+fmt(ep):'—'}</td>
-      <td class="num" style="color:${inf>0?'var(--up)':inf<0?'var(--down)':'inherit'}">${inf!==undefined?(inf>0?'+':'')+fmt(inf):'—'}</td>
+      <td class="num">${tri(ep)}</td>
+      <td class="num">${tri(inf)}</td>
+      <td class="num">${tri(luck)}</td>
       <td class="num"><b>${sc!==undefined?fmt(sc):'—'}</b></td></tr>`;});
   h+=`</table></div>`;
   // 말별 능력치 + 정보 상세
