@@ -33,6 +33,13 @@ h1.big span{color:var(--amber)}
 .tick{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:18px 22px;margin:12px 0;
   opacity:0;transform:translateY(16px);transition:.5s}
 .tick.on{opacity:1;transform:none}
+/* 롤링 배너: 5초 주기 — 아래에서 살짝 올라오며 등장, 끝에서 사라짐 */
+.tick.cyc{animation:cycfade 5s ease both}
+@keyframes cycfade{
+  0%{opacity:0;transform:translateY(14px)}
+  8%{opacity:1;transform:none}
+  88%{opacity:1;transform:none}
+  100%{opacity:0;transform:translateY(-10px)}}
 .tick .src{display:flex;justify-content:space-between;margin-bottom:8px;font-size:15px}
 .tick .src .rel{font-family:'Chakra Petch','Pretendard',monospace;color:var(--amber)}
 .tick .body{font-size:20px;line-height:1.5}
@@ -177,6 +184,23 @@ function raceRng(seed,round,horse){
   let h=seed+round*1000;for(const ch of horse)h+=ch.charCodeAt(0);
   return mulberry32(h)()*5;
 }
+/* 베팅 대기 화면 롤링 규칙 안내 — 튜토리얼 요약 */
+const RULE_LINES=[
+ ()=>`비공개 정보 ${state&&state.deck?Object.keys(state.deck).length:10}건은 휴대폰 <b style="color:var(--amber)">[상점]</b>에서 구매할 수 있습니다 — 1건 10만원`,
+ ()=>`정보 구매권은 라운드당 <b style="color:var(--amber)">3회</b> — 남은 구매권은 다음 라운드로 이월됩니다 (최대 6회)`,
+ ()=>`<b style="color:var(--amber)">진위 판별권 20만원</b> — 구매한 정보가 사실인지 거짓인지 확인해 줍니다`,
+ ()=>`최종 점수 = <b style="color:var(--chalk)">기본(스탯) + 환경 + 정보 + 당일 운</b>`,
+ ()=>`베팅은 최대 <b style="color:var(--amber)">3마리</b> · 한도는 보유액의 <b style="color:var(--amber)">50%</b>`,
+ ()=>`배당은 <b style="color:var(--amber)">마감 후 공개</b> — 판돈이 몰린 말일수록 배당이 낮아집니다`,
+ ()=>`환경 5요소: <b style="color:var(--chalk)">날씨 · 기후 · 트랙 상태 · 바람 · 게이트</b>`,
+ ()=>`<b style="color:var(--down)">진흙탕·설원</b>은 적응력, <b style="color:var(--down)">혹서</b>는 기수, <b style="color:var(--down)">혹한</b>은 스타트가 승부를 가릅니다`,
+ ()=>`🌧 비 오는 날은 발주가 미끄럽고, ❄ 눈 오는 날은 기수의 시야 싸움입니다`,
+ ()=>`순풍은 <b style="color:var(--chalk)">스피드</b>형에게, 역풍은 <b style="color:var(--chalk)">뒷심</b>형에게 유리합니다`,
+ ()=>`게이트는 안쪽(1번)일수록 유리 — 스타트 좋은 말은 바깥에서도 덜 손해봅니다`,
+ ()=>`매체마다 <b style="color:var(--amber)">신뢰도</b>가 다릅니다 — 어디서 나온 소식인지 확인하세요`,
+ ()=>`직전 경주 <b style="color:var(--down)">우승마는 피로</b>를 안고 출전합니다`,
+ ()=>`말대가리 캡틴의 세 마리 — 셋 다 우승 후보라는 뜻은 아닙니다`,
+ ()=>`파산해도 딱 한 번, 구제금 10만원이 지급됩니다`];
 let SPECIAL={};
 db.ref(`${ROOT}/special`).on('value',s=>{SPECIAL=s.val()||{};});
 async function acquireRaceLock(r,who){
@@ -551,21 +575,28 @@ function renderOpen(){
   },250);
   // 공개 소식 순환 티커
   const dkT=state.deck?Object.values(state.deck).map(Number):CARDS[state.round-1].map((c,i)=>i);
-  const cards=dkT.map(i=>({c:cardOf(state.round,i),i})).filter(x=>x.c&&x.c.pub);let ti=0;
+  const cards=dkT.map(i=>({c:cardOf(state.round,i),i})).filter(x=>x.c&&x.c.pub);let ti=0,ci=0;
   function cycle(){
     const box=document.getElementById('cycleTick');if(!box)return;
-    if(!cards.length){ // v0.5: 기본 소식 전량 비공개 — 공개(커스텀) 소식이 없으면 안내만
-      box.innerHTML=`<div class="tick on"><div class="body" style="color:var(--muted)">이번 경주 정보 ${state.deck?Object.keys(state.deck).length:0}건은 전부 비공개 — 휴대폰 [상점]에서 구매하세요</div></div>`;
-      return;}
-    const {c,i}=cards[ti%cards.length];
-    box.innerHTML=`<div class="tick on"><div class="src"><span>${MEDIA[c.m].name}</span>
-      <span class="rel">신뢰도 ${Math.round(MEDIA[c.m].rel*100)}%</span></div>
-      <div class="body">${cardText(c,i)}</div>
-      ${c.noeff?'<div class="eff">확정 사실</div>':`<div class="eff">사실일 경우 → <b class="${c.d>0?'up':'dn'}">${tgOfCur(i)} ${c.stat} ${c.d>0?'+':''}${c.d}</b></div>`}</div>`;
+    // 로테이션 풀: 규칙 요약 + (있다면) 공개 커스텀 소식 — 번갈아 표시
+    const pool=[];
+    RULE_LINES.forEach((fn,k)=>{pool.push({kind:'rule',k});if(cards.length&&k%2===1)pool.push({kind:'card'});});
+    if(!pool.length)return;
+    const item=pool[ti%pool.length];
+    if(item.kind==='rule'){
+      box.innerHTML=`<div class="tick on cyc" style="text-align:center">
+        <div class="body" style="color:var(--muted);font-size:min(21px,2.5vh)">${RULE_LINES[item.k]()}</div></div>`;
+    }else{
+      const {c,i}=cards[ci%cards.length];ci++;
+      box.innerHTML=`<div class="tick on cyc"><div class="src"><span>${MEDIA[c.m].name}</span>
+        <span class="rel">신뢰도 ${Math.round(MEDIA[c.m].rel*100)}%</span></div>
+        <div class="body" style="text-align:center">${cardText(c,i)}</div>
+        ${c.noeff?'<div class="eff" style="text-align:center">확정 사실</div>':`<div class="eff" style="text-align:center">사실일 경우 → <b class="${c.d>0?'up':'dn'}">${tgOfCur(i)} ${c.stat} ${c.d>0?'+':''}${c.d}</b></div>`}</div>`;
+    }
     ti++;
   }
   cycle();if(window._cycleT)clearInterval(window._cycleT);
-  window._cycleT=setInterval(()=>{if(state&&state.phase==='open')cycle();},7000);
+  window._cycleT=setInterval(()=>{if(state&&state.phase==='open')cycle();},5000);
 }
 function renderRace(){
   const res=results[state.round];
