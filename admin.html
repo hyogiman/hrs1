@@ -268,7 +268,11 @@ const DISTW={'단':[.35,.50,.15],'중':[.40,.30,.30],'장':[.35,.15,.50]};
 const WXICON={'맑음':'☀','흐림':'☁','비':'🌧','눈':'❄'};
 const TRACKC={'매우 단단함':0.08,'초원':0.20,'진흙탕':0.55,'설원':0.42}; // 트랙 → 적응력 계수
 const ENVC={wS:0.22,wF:0.34,tJ:0.42,tS:0.16,gate:1.3,gateS:1.1,rain:0.06,snow:0.06};
-const CTR={ad:25,jk:27,st:31};   // 적응력·기수·스타트의 기준점(전마 평균) — ▲▼ 대칭 표기용
+const CTR={ad:25,jk:27,st:31};
+/* 부담 피로 — 직전 우승마에게 부과. 연속 우승 시 배수로 누적(황제말 방지) */
+const FAT={base:4.0,mult:1.5,cap:2.5};  // 1연승 ~6점 · 2연승 ~9점 · 3연승 이상 ~16점 (연승은 가능하되 점점 무거워짐)
+function fatMult(streak){return Math.min(FAT.cap,Math.pow(FAT.mult,Math.max(0,(streak||1)-1)));}
+function fatPenalty(stArr,streak){return FAT.base*fatMult(streak)*(1+(60-stArr[4])/60);}   // 적응력·기수·스타트의 기준점(전마 평균) — ▲▼ 대칭 표기용
 /* 시즌 시드 → 에피소드 순서 (1·10 고정, 2~9 셔플) */
 let _epCache={},_seedOverride=null;
 function epOrder(seed){seed=(seed>>>0);if(_epCache[seed])return _epCache[seed];
@@ -281,7 +285,7 @@ function EPX(r){return epOrder(CURSEED())[r-1];}
 const BASE_SCALE=44;
 const CUSTOM_BASE=100;  // 커스텀 카드 인덱스 시작
 const INFO_CAP=24;      // 라운드당 정보 효과 상한(±점)
-const PERM_CAP=30;      // 시즌 누적 영구 스탯 변동 상한(±)
+const PERM_CAP=20;      // 시즌 누적 영구 스탯 변동 상한(±) — 황제말 억제를 위해 20으로 제한
 const START_MONEY=300;  // 시작 자금(만원)
 const PRICES={info:10,verify:20};   // 정보권 / 진위 판별권
 const BUY_BASE=3;       // 라운드당 기본 구매 횟수
@@ -485,9 +489,11 @@ function envOnly(stArr,round,gate,fatigue,isFat){
   if(S.wx==='비')e+=(stArr[1]-CTR.st)*ENVC.rain;         // 비: 미끄러운 발주
   if(S.wx==='눈')e+=(stArr[4]-CTR.jk)*ENVC.snow;         // 눈: 시야 — 기수 침착성
   e+=(3-gate)*ENVC.gate+((stArr[1]-33)/50)*(gate-3)*ENVC.gateS;  // 게이트
-  if(isFat)e-=0.15*(60-stArr[4]);                        // 직전 우승 피로
+  if(isFat)e-=fatPenalty(stArr,fatStreak());             // 직전 우승 피로(연속 우승 누적)
   return e;
 }
+/* 현재 부과 중인 연승 수 — state.fatStreak (구버전 데이터는 1로 간주) */
+function fatStreak(){return (typeof state!=='undefined'&&state&&state.fatStreak)?state.fatStreak:1;}
 function baseWith(h,stArr,round,fatigue,gate){
   return baseOnly(stArr,round)+envOnly(stArr,round,gate||3,fatigue,fatigue===h);
 }
@@ -685,7 +691,7 @@ async function startSeason(){
   _seedOverride=seed;truthCache=genTruth(seed);cachedSeed=seed;
   const capt=captainPicks(seed,1,field,deck,tg,gates,null,null);
   try{
-    await db.ref(`${ROOT}/state`).set({phase:'open',round:1,seed,field,deck,fatigue:null,statMods:null,
+    await db.ref(`${ROOT}/state`).set({phase:'open',round:1,seed,field,deck,fatigue:null,fatStreak:0,statMods:null,
       cardTg:tg,gates,captain:capt,kra:kraNotice(1),special:SPECIAL[1]||null,deadline:Date.now()+secs*1000});
     await db.ref(`${ROOT}/cardTg`).set({1:tg});
   }catch(e){dbError(e);return;}
@@ -736,7 +742,12 @@ async function advanceRound(){
     }});
   const nr=r+1;
   const {field,deck,tg}=buildRound(state.seed,nr);
+  // 연속 우승 추적: 직전 우승마가 이번에도 우승했으면 누적, 아니면 1로 초기화
+  const prevFatH=state.fatigue||null;
+  const wonAgain=res&&prevFatH&&res.winner===prevFatH;
+  const newStreak=res?(wonAgain?(state.fatStreak||1)+1:1):0;
   const fat=res&&field.includes(res.winner)?res.winner:null;
+  const fatStreakNext=fat?newStreak:0;
   const gates=assignGates(state.seed,nr,field);
   const secs=parseInt($('betSecs').value)||300;
   // 구매 횟수: 기본 3회 + 직전 라운드 미사용분(1회 한정 이월, 최대 6)
@@ -746,11 +757,11 @@ async function advanceRound(){
   if(Object.keys(cu).length)await db.ref(`${ROOT}/players`).update(cu);
   const capt=captainPicks(state.seed,nr,field,deck,tg,gates,mods,fat);
   await db.ref(`${ROOT}/state`).update({phase:'open',round:nr,field,deck,
-    fatigue:fat,statMods:mods,cardTg:tg,gates,captain:capt,kra:kraNotice(nr),
+    fatigue:fat,fatStreak:fatStreakNext,statMods:mods,cardTg:tg,gates,captain:capt,kra:kraNotice(nr),
     special:SPECIAL[nr]||null,deadline:Date.now()+secs*1000,showRanking:r===5});
   await db.ref(`${ROOT}/cardTg/${nr}`).set(tg);
   if(r===5)log('★ 중간 순위 공개 — 스크린에 표시');
-  log(`라운드 ${nr} 시작 — 출전: ${field.map(disp).join(',')}${manualField(state.seed,nr)?' (수동 지정 포함)':''} (피로: ${fat?disp(fat):'-'}${res&&!field.includes(res.winner)?', 우승마 '+disp(res.winner)+' 휴식':''})`);
+  log(`라운드 ${nr} 시작 — 출전: ${field.map(disp).join(',')}${manualField(state.seed,nr)?' (수동 지정 포함)':''} (피로: ${fat?disp(fat)+(fatStreakNext>1?` ${fatStreakNext}연승 누적`:''):'-'}${res&&!field.includes(res.winner)?', 우승마 '+disp(res.winner)+' 휴식':''})`);
 }
 
 /* 마감/경주 시작 직전, 아직 베팅하지 않은 봇을 모두 참여시킨다 */
@@ -1418,7 +1429,12 @@ function opsLogHTML(){
     const buys=o.map(ci=>{
       const tg=res&&res.cardTg?res.cardTg[ci]:(r===state.round?(state.cardTg||{})[ci]:null);
       return tg?disp(tg):'?';});
-    const v=(verifiedAll[opsSel]||{})[r];
+    const vr=(verifiedAll[opsSel]||{})[r];
+    let vn=0;
+    if(vr){Object.keys(vr).forEach(k=>{const x=vr[k];
+      if(x&&typeof x==='object'&&x.req!==undefined&&!isNaN(+k))vn++;});
+      if(!vn&&vr.idx!==undefined)vn=vr.count||1;}
+    const v=vn?{count:vn,idx:0}:null;
     let out=[];
     if(o.length)out.push(`🛒 정보 ${o.length}건 (${buys.join(', ')})`);
     if(v&&v.idx!==undefined)out.push(`🔍 판별 ${v.count||1}회`);
@@ -1453,7 +1469,7 @@ function opsHorseHTML(){
       return `<tr style="border-top:1px solid var(--line)">
       <td style="color:${HORSES[h].tag?'inherit':'inherit'}"><b>${disp(h)}</b></td>
       <td>${s.run.length?s.run.map(r=>'R'+r).join(' '):'—'}</td>
-      <td class="num">${s.win}회</td><td class="num">${s.fat}회</td>
+      <td class="num">${s.win}회</td><td class="num">${s.fat}회${(state.fatigue===h&&(state.fatStreak||1)>1)?` <b style="color:var(--down)">(현재 ${state.fatStreak}연승)</b>`:''}</td>
       <td style="padding-left:10px;color:${pm?'var(--amber)':'var(--muted)'}">${pm||'—'}</td></tr>`;}).join('')}</table>`;
 }
 
@@ -1552,22 +1568,34 @@ function sweepRequests(){
   Object.keys(verifyReq).forEach(u=>{
     const rounds=verifyReq[u];if(!rounds)return;
     Object.keys(rounds).forEach(r=>{
-      const v=rounds[r];
-      if(!v||v.idx===undefined||v.answer!==undefined)return;
-      const key='v:'+u+':'+r;if(inFlight.has(key))return;
-      inFlight.add(key);
-      const ans=truthOf(+r,v.idx);
-      db.ref(`${ROOT}/verified/${u}/${r}/answer`).set(ans)
-        .then(()=>log(`판별 응답: ${players[u]?players[u].name:u} R${r} → ${ans?'사실':'거짓'}`))
-        .catch(e=>dbError(e))
-        .finally(()=>inFlight.delete(key));
+      const rd=rounds[r];if(!rd)return;
+      // 신 구조: 라운드 아래 카드별 {req,answer} · 구 구조: 라운드에 단일 {idx,req,answer}
+      const jobs=[];
+      Object.keys(rd).forEach(k=>{const v=rd[k];
+        if(v&&typeof v==='object'&&v.req!==undefined&&!isNaN(+k))jobs.push({idx:+k,v,path:`${r}/${k}/answer`});});
+      if(!jobs.length&&rd.idx!==undefined)jobs.push({idx:+rd.idx,v:rd,path:`${r}/answer`});
+      jobs.forEach(({idx,v,path})=>{
+        if(v.answer!==undefined)return;
+        const key='v:'+u+':'+path;if(inFlight.has(key))return;
+        inFlight.add(key);
+        const ans=truthOf(+r,idx);
+        db.ref(`${ROOT}/verified/${u}/${path}`).set(ans)
+          .then(()=>log(`판별 응답: ${players[u]?players[u].name:u} R${r} → ${ans?'사실':'거짓'}`))
+          .catch(e=>dbError(e))
+          .finally(()=>inFlight.delete(key));
+      });
     });
   });
   countPending();
 }
 function countPending(){
   let n=0;
-  Object.values(verifyReq).forEach(rs=>{if(rs)Object.values(rs).forEach(v=>{if(v&&v.idx!==undefined&&v.answer===undefined)n++;});});
+  Object.values(verifyReq).forEach(rs=>{if(!rs)return;
+    Object.values(rs).forEach(rd=>{if(!rd)return;
+      let found=false;
+      Object.keys(rd).forEach(k=>{const v=rd[k];
+        if(v&&typeof v==='object'&&v.req!==undefined&&!isNaN(+k)){found=true;if(v.answer===undefined)n++;}});
+      if(!found&&rd.idx!==undefined&&rd.answer===undefined)n++;});});
   pendCnt=n;
   const el=$('stStatus');
   if(el&&el.dataset.base!==undefined)el.textContent=el.dataset.base+(n?` · ⏳ 미응답 요청 ${n}건`:'');

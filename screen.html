@@ -163,6 +163,10 @@ const DISTW={'단':[.35,.50,.15],'중':[.40,.30,.30],'장':[.35,.15,.50]};
 const TRACKC={'매우 단단함':0.08,'초원':0.20,'진흙탕':0.55,'설원':0.42};
 const ENVC={wS:0.22,wF:0.34,tJ:0.42,tS:0.16,gate:1.3,gateS:1.1,rain:0.06,snow:0.06};
 const CTR={ad:25,jk:27,st:31};
+const FAT={base:4.0,mult:1.5,cap:2.5};
+function fatMult(streak){return Math.min(FAT.cap,Math.pow(FAT.mult,Math.max(0,(streak||1)-1)));}
+function fatPenalty(stArr,streak){return FAT.base*fatMult(streak)*(1+(60-stArr[4])/60);}
+function fatStreak(){return (state&&state.fatStreak)?state.fatStreak:1;}
 function baseOnly(stArr,round){
   const S=SC(round),w=DISTW[S.d];
   return (stArr[0]*w[0]+stArr[1]*w[1]+stArr[2]*w[2])/50*BASE_SCALE;
@@ -177,7 +181,7 @@ function envOnly(stArr,round,gate,fatigue,isFat){
   if(S.wx==='비')e+=(stArr[1]-CTR.st)*ENVC.rain;
   if(S.wx==='눈')e+=(stArr[4]-CTR.jk)*ENVC.snow;
   e+=(3-gate)*ENVC.gate+((stArr[1]-33)/50)*(gate-3)*ENVC.gateS;
-  if(isFat)e-=0.15*(60-stArr[4]);
+  if(isFat)e-=fatPenalty(stArr,fatStreak());
   return e;
 }
 function raceRng(seed,round,horse){
@@ -198,7 +202,7 @@ const RULE_LINES=[
  ()=>`순풍은 <b style="color:var(--chalk)">스피드</b>형에게, 역풍은 <b style="color:var(--chalk)">뒷심</b>형에게 유리합니다`,
  ()=>`게이트는 안쪽(1번)일수록 유리 — 스타트 좋은 말은 바깥에서도 덜 손해봅니다`,
  ()=>`매체마다 <b style="color:var(--amber)">신뢰도</b>가 다릅니다 — 어디서 나온 소식인지 확인하세요`,
- ()=>`직전 경주 <b style="color:var(--down)">우승마는 피로</b>를 안고 출전합니다`,
+ ()=>`직전 경주 <b style="color:var(--down)">우승마는 피로</b>를 안고 출전합니다 — 연승이 이어질수록 더 무거워집니다`,
  ()=>`말대가리 캡틴의 세 마리 — 셋 다 우승 후보라는 뜻은 아닙니다`,
  ()=>`파산해도 딱 한 번, 구제금 10만원이 지급됩니다`];
 let SPECIAL={};
@@ -319,13 +323,19 @@ function sweepVerify(){
   if(!state||state.seed===undefined)return;
   Object.keys(VREQ).forEach(u=>{const rounds=VREQ[u]||{};
     Object.keys(rounds).forEach(r=>{
-      const v=rounds[r];
-      if(!v||v.idx===undefined||v.answer!==undefined)return;
-      const key=u+':'+r;if(vInFlight.has(key))return;vInFlight.add(key);
-      let ans;
-      try{ans=truthOf(+r,v.idx);}catch(e){vInFlight.delete(key);return;}
-      db.ref(`${ROOT}/verified/${u}/${r}/answer`).transaction(cur=>cur===null?ans:undefined)
-        .catch(()=>{}).finally(()=>vInFlight.delete(key));
+      const rd=rounds[r];if(!rd)return;
+      const jobs=[];
+      Object.keys(rd).forEach(k=>{const v=rd[k];
+        if(v&&typeof v==='object'&&v.req!==undefined&&!isNaN(+k))jobs.push({idx:+k,v,path:`${r}/${k}/answer`});});
+      if(!jobs.length&&rd.idx!==undefined)jobs.push({idx:+rd.idx,v:rd,path:`${r}/answer`});
+      jobs.forEach(({idx,v,path})=>{
+        if(v.answer!==undefined)return;
+        const key=u+':'+path;if(vInFlight.has(key))return;vInFlight.add(key);
+        let ans;
+        try{ans=truthOf(+r,idx);}catch(e){vInFlight.delete(key);return;}
+        db.ref(`${ROOT}/verified/${u}/${path}`).transaction(cur=>cur===null?ans:undefined)
+          .catch(()=>{}).finally(()=>vInFlight.delete(key));
+      });
     });});
 }
 function effStats2(h){const st=[...HORSES[h].s];const mods=(state&&state.statMods||{})[h]||{};
@@ -512,7 +522,9 @@ db.ref(`${ROOT}/names`).on('value',s=>{NAMES=s.val()||{};render(true);});
 
 function autoText(){const r=state.round,S=SC(r);
   let t=`제${r}경주 ${S.name} — ${S.d==='단'?'단거리 1200m':S.d==='중'?'중거리 1800m':'장거리 2400m'} · ${WXICON[S.wx]} ${S.wx} · ${S.temp} · 트랙 ${S.track} · ${S.wind}`;
-  if(state.fatigue)t+=` · 컨디션 공시 — ${state.fatigue}: 전 경주 피로 ▼`;return t;}
+  if(state.fatigue){const n=state.fatStreak||1;
+    t+=` · 컨디션 공시 — ${state.fatigue}: ${n>1?'연승 누적 피로 ▼▼':'전 경주 피로 ▼'}`;}
+  return t;}
 function field(){return state.field?Object.values(state.field):[];}
 function tgOfCur(i){const t=(state&&state.cardTg||{})[i];return t?disp(t):'?';}
 function cardText(c,i){return c.auto?autoText():(c.t||'').replace(/\{말\}/g,tgOfCur(i));}
