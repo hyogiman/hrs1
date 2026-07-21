@@ -948,7 +948,7 @@ function autoTick(){
   if(!auto)return;
   const msg=$('autoMsg');
   if(!state||!state.round){msg.textContent='자동: 시즌 없음';return;}
-  const key=state.round+'-'+state.phase;
+  const key=(state.seed||0)+'-'+state.round+'-'+state.phase;   // 시즌 구분 포함 — 리셋 후 새 시즌에서도 자동 진행
   if(state.phase==='open'){
     if(!state.deadline||Date.now()<=state.deadline){autoStage='';msg.textContent='자동: 베팅 마감 대기 중';return;}
     if(autoDoneKey===key)return;

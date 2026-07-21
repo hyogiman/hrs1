@@ -270,10 +270,10 @@ db.ref(`${ROOT}/config/auto`).on('value',s=>{AUTO=!!s.val();
 function toggleAutoS(){db.ref(`${ROOT}/config/auto`).set(!AUTO).catch(()=>{});}
 setInterval(autoTickS,400);
 async function autoTickS(){
-  if(!state||!state.round)return;
+  if(!state||!state.round){autoStageS='';autoDoneKeyS='';raceAtS=0;lastPhaseS='';return;}
   if(state.phase!==lastPhaseS){lastPhaseS=state.phase;if(state.phase==='race')raceAtS=Date.now();else if(state.phase!=='race')raceAtS=0;}
   if(!AUTO)return;
-  const key=state.round+'-'+state.phase;
+  const key=(state.seed||0)+'-'+state.round+'-'+state.phase;   // 시즌 구분 포함 — 리셋 후 새 시즌에서도 자동 진행
   if(state.phase==='open'){
     if(!state.deadline||Date.now()<=state.deadline){autoStageS='';return;}
     if(autoDoneKeyS===key)return;

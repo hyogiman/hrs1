@@ -459,7 +459,12 @@ firebase.auth().onAuthStateChanged(u=>{if(u&&!uid){uid=u.uid;
 
 /* ════════ 리스너 ════════ */
 function listen(){
-  db.ref(`${ROOT}/players/${uid}`).on('value',s=>{me=s.val();if(!me)return;
+  db.ref(`${ROOT}/players/${uid}`).on('value',s=>{me=s.val();
+    if(!me){ // 리셋·퇴장: 화면 잔존 데이터 청소 후 입장 화면으로
+      $('myName').textContent='—';$('myMoney').textContent='0';
+      alloc={};lastPhase='';lastRound='';activeTab='race';selHorse=0;
+      results={};myBets={};myOwned={};myVerified={};
+      render();return;}
     $('myName').textContent=me.name;$('myMoney').textContent=fmt(me.money);
     $('tote').classList.remove('hidden');$('phasebar').classList.remove('hidden');
     updateCapDisplay(); // 베팅 탭이 열려 있어도 입력은 안 건드리고 한도 표시만 갱신
