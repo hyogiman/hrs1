@@ -1073,10 +1073,26 @@ function detailHTML(r,res){
 /* ════════ 최종 + 리포트 ════════ */
 async function renderFinal(){
   $('finalMoney').textContent=fmt(me.money)+'만원';
-  const ps=await db.ref(`${ROOT}/players`).get();const all=[];
-  ps.forEach(s=>all.push({n:s.val().name,m:s.val().money}));
-  all.sort((a,b)=>b.m-a.m);const rank=all.findIndex(a=>a.n===me.name)+1;
-  $('finalRank').textContent=`${all.length}명 중 ${rank}위`;
+  $('finalRank').textContent='순위 집계 중…';
+  try{
+    const ps=await db.ref(`${ROOT}/players`).get();
+    const all=[];
+    ps.forEach(s=>{const v=s.val()||{};all.push({id:s.key,m:+v.money||0,bot:!!v.bot});});
+    // uid 기준 정렬·조회 — 이름이 겹치는 봇/동명이인이 있어도 정확
+    all.sort((a,b)=>b.m-a.m);
+    const rank=all.findIndex(a=>a.id===uid)+1;
+    const humans=all.filter(a=>!a.bot);
+    const hRank=humans.findIndex(a=>a.id===uid)+1;
+    if(rank>0){
+      let txt=`전체 ${all.length}명 중 <b style="color:var(--amber)">${rank}위</b>`;
+      // 봇이 섞여 있으면 사람끼리의 순위도 함께 (참가자에게 더 의미 있는 지표)
+      if(humans.length&&humans.length<all.length&&hRank>0)
+        txt+=` · 참가자 ${humans.length}명 중 <b style="color:var(--amber)">${hRank}위</b>`;
+      $('finalRank').innerHTML=txt;
+    }else $('finalRank').textContent=`전체 ${all.length}명 참가`;
+  }catch(e){
+    $('finalRank').textContent='순위를 불러오지 못했습니다';
+  }
   buildReport();
 }
 function softmax(obj,tau){const mx=Math.max(...Object.values(obj));let s=0;const e={};
